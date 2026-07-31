@@ -68,11 +68,11 @@ function renderPng(nodes, wires) {
   return canvas.toDataURL('image/png');
 }
 
-// Slim bar above the three-panel grid: app name on the left, a single File
-// menu on the right holding New/Save/Load/Export. Has no state of its own
-// beyond the file input ref; the menu's open/closed state is lifted up to
-// App so the app-wide Escape handler can close the menu with priority over
-// wiring/selection.
+// Slim classic-style menubar above the three-panel grid: app name on the
+// left, a text File menu next to it holding New/Save/Load/Export. Has no
+// state of its own beyond the file input ref; the menu's open/closed state
+// is lifted up to App so the app-wide Escape handler can close the menu with
+// priority over wiring/selection.
 function TopBar({
   nodes,
   wires,
@@ -157,48 +157,50 @@ function TopBar({
   return (
     <header className="top-bar">
       <span className="top-bar-title">GATEPAINT</span>
-      <div className="top-bar-menu-wrap" ref={menuWrapRef}>
-        <button
-          type="button"
-          className="top-bar-button"
-          aria-haspopup="true"
-          aria-expanded={menuOpen}
-          onClick={handleFileButtonClick}
-        >
-          File
-        </button>
-        {menuOpen && (
-          <ul className="top-bar-menu">
-            <li>
-              <button type="button" className="top-bar-menu-item" onClick={handleNewClick}>
-                New
-              </button>
-            </li>
-            <li>
-              <button type="button" className="top-bar-menu-item" onClick={handleSaveClick}>
-                Save
-              </button>
-            </li>
-            <li>
-              <button type="button" className="top-bar-menu-item" onClick={handleLoadClick}>
-                Load
-              </button>
-            </li>
-            <li>
-              <button type="button" className="top-bar-menu-item" onClick={handleExportClick}>
-                Export
-              </button>
-            </li>
-          </ul>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,application/json"
-          className="top-bar-file-input"
-          onChange={handleFileChange}
-        />
-      </div>
+      <nav className="top-bar-menubar">
+        <div className="top-bar-menu-wrap" ref={menuWrapRef}>
+          <button
+            type="button"
+            className={`top-bar-menu-label${menuOpen ? ' is-open' : ''}`}
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            onClick={handleFileButtonClick}
+          >
+            File
+          </button>
+          {menuOpen && (
+            <ul className="top-bar-menu">
+              <li>
+                <button type="button" className="top-bar-menu-item" onClick={handleNewClick}>
+                  New
+                </button>
+              </li>
+              <li>
+                <button type="button" className="top-bar-menu-item" onClick={handleSaveClick}>
+                  Save
+                </button>
+              </li>
+              <li>
+                <button type="button" className="top-bar-menu-item" onClick={handleLoadClick}>
+                  Load
+                </button>
+              </li>
+              <li className="top-bar-menu-separator" role="separator">
+                <button type="button" className="top-bar-menu-item" onClick={handleExportClick}>
+                  Export
+                </button>
+              </li>
+            </ul>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="top-bar-file-input"
+            onChange={handleFileChange}
+          />
+        </div>
+      </nav>
     </header>
   );
 }

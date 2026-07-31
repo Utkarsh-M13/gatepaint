@@ -12,50 +12,78 @@
   user-select: none;
 }
 
-/* ---------- top bar ---------- */
+/* ---------- top bar (classic menubar) ---------- */
 
 .top-bar {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 18px;
   border: 1px solid var(--line);
   border-radius: 2px;
   background: var(--surface-2);
-  padding: 6px 14px;
+  padding: 3px 10px;
 }
 
 .top-bar-title {
   font-family: var(--sans);
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 400;
   letter-spacing: 0.18em;
   color: var(--accent);
 }
 
+/* The menu strip that sits beside the wordmark. Room to add Edit/View menu
+   labels here later, next to File, without touching the bar shell. */
+.top-bar-menubar {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+}
+
 .top-bar-menu-wrap {
   position: relative;
   display: flex;
+  align-items: stretch;
 }
 
-/* The dropdown itself: same plate recipe as a panel (dark surface, hairline
-   border, barely-rounded corners), pinned under the File button, above
-   everything else on the page. */
+/* The File label itself: no button chrome, just text with a little
+   breathing room, like a title in a real desktop app menu bar. It only
+   picks up color when open or hovered, same treatment a selected menu
+   title gets. */
+.top-bar-menu-label {
+  font-family: var(--sans);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-h);
+  background: none;
+  border: none;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.top-bar-menu-label:hover,
+.top-bar-menu-label.is-open {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+/* The dropdown itself: squared, hairline-bordered panel flush under the
+   File label with no gap, left-aligned to the label so it reads as
+   "belonging" to it rather than floating. */
 .top-bar-menu {
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  top: 100%;
+  left: 0;
   z-index: 20;
   margin: 0;
-  padding: 4px;
+  padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  min-width: 140px;
+  min-width: 150px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 2px;
 }
 
 .top-bar-menu-item {
@@ -63,41 +91,28 @@
   text-align: left;
   font-family: var(--sans);
   font-size: 20px;
-  line-height: 1.2;
+  line-height: 1.3;
   color: var(--text-h);
   background: none;
   border: none;
-  border-radius: 2px;
-  padding: 6px 10px;
+  padding: 3px 14px;
   cursor: pointer;
 }
 
-.top-bar-menu-item:hover {
-  color: var(--accent);
-  background: var(--surface-2);
+/* Classic inverted selection bar: full-width amber fill, dark text, on
+   hover or keyboard focus. */
+.top-bar-menu-item:hover,
+.top-bar-menu-item:focus-visible {
+  color: var(--bg);
+  background: var(--accent);
+  outline: none;
 }
 
-/* Same recipe as the palette chips: dark fill, hairline edge, squared
-   corners, amber on hover/active. */
-.top-bar-button {
-  font-family: var(--sans);
-  font-size: 20px;
-  line-height: 1.1;
-  color: var(--text-h);
-  background: var(--surface);
-  border: 1px solid var(--line-hi);
-  border-radius: 2px;
-  padding: 5px 16px;
-  cursor: pointer;
-}
-
-.top-bar-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.top-bar-button:active {
-  background: var(--bg);
+/* Thin separator rule grouping New/Save/Load apart from Export. */
+.top-bar-menu-separator {
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+  padding-top: 2px;
 }
 
 .top-bar-file-input {

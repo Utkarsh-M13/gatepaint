@@ -115,6 +115,7 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Keydown delete shortcuts ignore button/input targets so the bar cannot trigger deletions.
 - Verified: 29/29 tests, clean build, JSON round-trip script showed 0 pixel mismatches on the checkerboard and rejected five malformed inputs; DOM/accessibility check at 1440x900 confirmed layout with no overflow.
 - Follow-up: the four actions moved into a single File dropdown in the top bar (outside-click and Escape close it, Escape prioritizes menu-close over wiring-cancel while open; themed like the panels). Verified: 29/29 tests, clean build, accessibility-tree check.
+- Follow-up: restyled the File control as a classic desktop menubar. File is now a flat text menu label (no button chrome) that inverts to amber when open/hovered; the menu is a squared bordered panel flush under the label with full-width inverted-bar item selection and a separator above Export. Handlers unchanged. Verified: 29/29 tests, clean build, screenshot confirms the menubar look.
 
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
