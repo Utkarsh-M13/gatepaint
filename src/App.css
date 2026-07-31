@@ -1,0 +1,560 @@
+/* One visual language across the app: flat dark surfaces, 1px hairlines,
+   barely-rounded corners, uppercase dim labels, amber only for live state. */
+
+.app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 10px;
+  height: 100svh;
+  padding: 10px;
+  background: var(--bg);
+  /* Dragging gates around should never start a text selection. */
+  user-select: none;
+}
+
+.left-column,
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+/* Every panel is the same object: a dark plate with a hairline edge and a
+   ruled title strip along the top. */
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel-title {
+  margin: 0;
+  padding: 4px 12px 2px;
+  font-family: var(--sans);
+  font-size: 21px;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The workspace SVG is flush to its panel edge, no inner padding, so the
+   drawn surface and the droppable surface are the same rectangle. */
+.workspace-panel .panel-body {
+  padding: 0;
+}
+
+.panel-hint {
+  color: var(--text);
+  font-size: 20px;
+}
+
+/* ---------- left column: palette ---------- */
+
+.palette-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.palette-panel .panel-body {
+  overflow: auto;
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.palette-heading {
+  margin: 16px 0 0;
+  font-family: var(--sans);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+}
+
+.palette-heading:first-child {
+  margin-top: 0;
+}
+
+/* Items wrap from the top left, they are never centered. */
+.palette-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: 6px;
+}
+
+/* Palette chips are the flat two-dimensional version of the gate boxes in
+   the workspace: same fill, same hairline, same squared corners. */
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--text-h);
+  background: var(--surface-2);
+  border: 1px solid var(--line-hi);
+  border-radius: 2px;
+  padding: 5px 14px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.palette-item:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.palette-item:active {
+  cursor: grabbing;
+}
+
+/* Input chips carry the same tell as input nodes in the workspace: a
+   darker, recessed fill. The pill icon already draws its own label, so the
+   chip is icon-only and gets tighter side padding. */
+.palette-item-input {
+  background: var(--bg);
+  padding: 5px 8px;
+}
+
+/* The icon is a miniature of the exact workspace shape, drawn in its own
+   coordinate system, so it is never stretched by flex layout. */
+.palette-icon {
+  flex: none;
+  display: block;
+  overflow: visible;
+}
+
+.palette-item-label {
+  pointer-events: none;
+}
+
+.drag-ghost {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-family: var(--sans);
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--accent);
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 5px 16px;
+}
+
+/* ---------- right column: canvas and workspace ---------- */
+
+/* The canvas sits on top at its natural height; the workspace takes
+   whatever is left below it. */
+.canvas-panel {
+  flex: none;
+}
+
+.workspace-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Canvas panel: the gridded canvas on the left, the readout and the
+   how-to-play copy in a sidebar on the right. */
+.canvas-block {
+  display: grid;
+  grid-template-columns: minmax(0, 430px) minmax(0, 1fr);
+  /* The grid and the sidebar are two separate things, so give them room to
+     read that way rather than crowding the edge of the pixels. */
+  column-gap: 44px;
+  row-gap: 16px;
+  align-items: start;
+}
+
+/* Two-cell grid: a corner label, the x-axis number row, the y-axis number
+   column, and the pixel grid. The label row/column sit outside the pixel
+   grid so the grid itself stays a strict square. */
+.canvas-grid-wrap {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  grid-template-rows: 24px 1fr;
+  grid-template-areas:
+    'corner xaxis'
+    'yaxis  grid';
+  column-gap: 4px;
+  row-gap: 4px;
+  width: 100%;
+  max-width: 430px;
+}
+
+.axis-corner {
+  grid-area: corner;
+  position: relative;
+}
+
+.axis-title {
+  position: absolute;
+  font-family: var(--sans);
+  font-size: 19px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.axis-title-x {
+  top: 0;
+  right: 2px;
+}
+
+.axis-title-y {
+  bottom: 0;
+  left: 2px;
+}
+
+.axis-x {
+  grid-area: xaxis;
+  display: grid;
+  align-items: end;
+}
+
+.axis-y {
+  grid-area: yaxis;
+  display: grid;
+  justify-items: end;
+  align-content: stretch;
+  padding-right: 3px;
+}
+
+.axis-number {
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text);
+  text-align: center;
+  align-self: center;
+}
+
+.output-canvas {
+  grid-area: grid;
+  display: grid;
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--line-hi);
+  /* The 1px gaps let the container colour show through as grid lines. */
+  gap: 1px;
+  background: var(--line);
+}
+
+.pixel-on {
+  background: var(--paint);
+}
+
+.pixel-off {
+  background: var(--bg);
+}
+
+/* Sidebar to the right of the grid: readout on top, how-to below. */
+.canvas-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-width: 460px;
+  padding-right: 4px;
+}
+
+/* Segment-display bit readout. A physical hardware readout bolted onto the
+   panel, in the same warm amber as the rest of the app. This is the star of
+   the canvas panel, so the digits are drawn big. */
+.readout-strip {
+  --led-ghost: var(--accent-ghost);
+  --led-dim: var(--accent-dim);
+  --led-on: var(--accent);
+  --led-glow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--line-hi);
+  border-radius: 2px;
+  padding: 10px 14px 8px;
+}
+
+.readout-strip.readout-active {
+  border-color: var(--accent-dim);
+  --led-glow: 0 0 10px rgba(224, 101, 79, 0.85), 0 0 22px rgba(224, 101, 79, 0.45);
+}
+
+.readout-digits {
+  display: flex;
+  align-items: flex-start;
+}
+
+.readout-group {
+  display: flex;
+}
+
+/* A visible break between the x nibble and the y nibble. */
+.readout-gap {
+  width: 14px;
+}
+
+.led-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.led-digit {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 70px;
+}
+
+.led-ghost,
+.led-value {
+  position: absolute;
+  inset: 0;
+  font-family: var(--seg);
+  font-size: 60px;
+  line-height: 70px;
+  text-align: center;
+}
+
+.led-ghost {
+  color: var(--led-ghost);
+  z-index: 0;
+}
+
+.led-value {
+  color: var(--led-dim);
+  text-shadow: none;
+  z-index: 1;
+}
+
+.readout-active .led-value {
+  color: var(--led-on);
+  text-shadow: var(--led-glow);
+}
+
+/* Which input bit each digit is. Dim so it labels without competing. */
+.led-label {
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+
+.readout-hint {
+  font-family: var(--sans);
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.readout-active .readout-hint {
+  color: var(--led-on);
+}
+
+/* How-to-play copy. Its own panel on the sidebar, same plate and ruled title
+   strip as every other panel, so it reads as a separate instrument. */
+.howto-panel {
+  flex: none;
+}
+
+.howto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.howto p {
+  font-family: var(--sans);
+  font-size: 20px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.howto b {
+  font-weight: 400;
+  color: var(--text-h);
+}
+
+/* ---------- workspace SVG ---------- */
+
+/* The SVG fills the whole workspace panel. Its viewBox is measured from the
+   element in App, so one user unit is one CSS pixel and nothing is
+   stretched. */
+.workspace-svg {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* Filled so the droppable surface is visible against the panel. */
+.workspace-background {
+  fill: var(--bg);
+}
+
+/* Gate symbols: flat dark fill, crisp hairline, same recipe as the palette
+   chips they are dragged from. Gates are IEEE distinctive shapes drawn as a
+   path, INPUT and OUTPUT are rects, and both share this class. */
+.gate-node-box {
+  fill: var(--surface-2);
+  stroke: var(--line-hi);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  cursor: grab;
+}
+
+.gate-node-box:hover {
+  stroke: var(--text-h);
+}
+
+/* The detached curve behind XOR. Unfilled, so it needs its own fat invisible
+   grab area, which the stroke width provides. */
+.gate-node-tail {
+  fill: none;
+  stroke: var(--line-hi);
+  stroke-width: 1;
+  stroke-linecap: round;
+  cursor: grab;
+}
+
+.gate-node-tail:hover {
+  stroke: var(--text-h);
+}
+
+.gate-node-tail.selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+/* Inputs are recessed, the output is the one lit fixture on the board. */
+.gate-node-input .gate-node-box {
+  fill: var(--bg);
+}
+
+.gate-node-output .gate-node-box {
+  fill: var(--bg);
+  stroke: var(--accent);
+}
+
+.gate-node-label {
+  fill: var(--text-h);
+  font-size: 20px;
+  font-family: var(--sans);
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+.gate-node-output .gate-node-label {
+  fill: var(--accent);
+}
+
+.gate-node-box.selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+/* Pins: outputs are solid studs, inputs are open sockets. */
+.pin {
+  cursor: pointer;
+}
+
+.pin-output {
+  fill: var(--wire);
+  stroke: var(--bg);
+  stroke-width: 1;
+}
+
+.pin-output:hover {
+  fill: var(--text-h);
+}
+
+.pin-input {
+  fill: var(--bg);
+  stroke: var(--wire);
+  stroke-width: 1.5;
+}
+
+.pin-input:hover {
+  stroke: var(--text-h);
+}
+
+.pin-active {
+  fill: var(--accent);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.wire {
+  fill: none;
+  stroke: var(--wire);
+  stroke-width: 1.5;
+}
+
+.wire-group {
+  cursor: pointer;
+}
+
+.wire-group:hover .wire {
+  stroke: var(--text-h);
+}
+
+.wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+}
+
+.wire-selected,
+.wire-group:hover .wire-selected {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.wire-preview {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+  pointer-events: none;
+}

@@ -1,0 +1,78 @@
+@import '@fontsource/vt323';
+
+/* DSEG7 Classic, used only for the segment-display bit readout. Just the
+   one weight is bundled, this is a toy, not a full font family. */
+@font-face {
+  font-family: 'DSEG7 Classic';
+  src:
+    url('dseg/fonts/DSEG7-Classic/DSEG7Classic-Regular.woff2') format('woff2'),
+    url('dseg/fonts/DSEG7-Classic/DSEG7Classic-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* One palette for the whole app: a warm dark terminal with an amber LED
+   accent. Everything else in the app pulls from these, so the panels, the
+   gate boxes, the wires, the canvas and the readout all read as parts of
+   one instrument rather than separate widgets.
+
+   Only a dark theme exists. The amber phosphor look does not survive being
+   inverted, so there is no light variant to keep in sync. */
+:root {
+  /* Surfaces, darkest to lightest. */
+  --bg: #0b0a09;
+  --surface: #121110;
+  --surface-2: #1a1816;
+
+  /* Hairlines. --line is the resting rule, --line-hi is hover/emphasis. */
+  --line: #3b352d;
+  --line-hi: #6b6055;
+
+  /* Type. --text is dim labelling, --text-h is lit phosphor. */
+  --text: #8b8177;
+  --text-h: #ece5da;
+
+  /* The single accent: amber LED. Used for selection, armed pins and the
+     live readout, nothing else. */
+  --accent: #e0654f;
+  --accent-dim: rgba(224, 101, 79, 0.34);
+  --accent-ghost: rgba(224, 101, 79, 0.13);
+
+  /* Wires and painted pixels. */
+  --wire: #7d7267;
+  --paint: #e8a15c;
+
+  /* Retro terminal look. VT323 is itself a monospaced glyph set, so the
+     fallback stack keeps the same fixed-width feel if it fails to load. */
+  --sans: 'VT323', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace;
+  --seg: 'DSEG7 Classic', var(--sans);
+
+  /* VT323 sits smaller than a normal typeface at the same font-size, so the
+     base size is bumped up from the old 16px. */
+  font: 26px/145% var(--sans);
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+#root {
+  min-height: 100svh;
+}
+
+p {
+  margin: 0;
+}
