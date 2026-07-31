@@ -2,14 +2,114 @@
    barely-rounded corners, uppercase dim labels, amber only for live state. */
 
 .app {
-  display: grid;
-  grid-template-columns: 300px 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   height: 100svh;
   padding: 10px;
   background: var(--bg);
   /* Dragging gates around should never start a text selection. */
   user-select: none;
+}
+
+/* ---------- top bar ---------- */
+
+.top-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface-2);
+  padding: 6px 14px;
+}
+
+.top-bar-title {
+  font-family: var(--sans);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+.top-bar-menu-wrap {
+  position: relative;
+  display: flex;
+}
+
+/* The dropdown itself: same plate recipe as a panel (dark surface, hairline
+   border, barely-rounded corners), pinned under the File button, above
+   everything else on the page. */
+.top-bar-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.top-bar-menu-item {
+  width: 100%;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--text-h);
+  background: none;
+  border: none;
+  border-radius: 2px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.top-bar-menu-item:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+}
+
+/* Same recipe as the palette chips: dark fill, hairline edge, squared
+   corners, amber on hover/active. */
+.top-bar-button {
+  font-family: var(--sans);
+  font-size: 20px;
+  line-height: 1.1;
+  color: var(--text-h);
+  background: var(--surface);
+  border: 1px solid var(--line-hi);
+  border-radius: 2px;
+  padding: 5px 16px;
+  cursor: pointer;
+}
+
+.top-bar-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.top-bar-button:active {
+  background: var(--bg);
+}
+
+.top-bar-file-input {
+  display: none;
+}
+
+.app-panels {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 10px;
 }
 
 .left-column,

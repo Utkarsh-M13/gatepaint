@@ -73,3 +73,15 @@ export const EMPTY_CIRCUIT = {
 // Default circuit shown on load. The sandbox starts blank; the presets above
 // stay exported so they can be dropped in when verifying the engine.
 export const DEFAULT_CIRCUIT = EMPTY_CIRCUIT;
+
+// The complete set of node types the engine understands. Used to validate a
+// loaded circuit file before it replaces the live one.
+export const KNOWN_NODE_TYPES = new Set([
+  'INPUT',
+  'AND',
+  'OR',
+  'NOT',
+  'XOR',
+  'NAND',
+  'OUTPUT',
+]);

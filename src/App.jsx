@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
-import { DEFAULT_CIRCUIT } from './circuits.js'
+import { DEFAULT_CIRCUIT, EMPTY_CIRCUIT } from './circuits.js'
 import {
   getNodeSize,
   OUTPUT_MARGIN,
@@ -10,6 +10,7 @@ import {
 import Palette from './components/Palette.jsx'
 import Workspace from './components/Workspace.jsx'
 import OutputCanvas from './components/OutputCanvas.jsx'
+import TopBar from './components/TopBar.jsx'
 
 let idCounter = 0
 function nextId(prefix) {
@@ -31,9 +32,31 @@ function clampNode(node, view) {
   }
 }
 
+// Pulls every node back inside the given view and re-pins OUTPUT to the
+// right edge, vertically centered. Shared by the view-resize effect and by
+// New/Load, which both drop in a fresh set of nodes that also needs pinning.
+function fitNodesToView(nodes, view) {
+  return nodes.map((node) => {
+    if (node.type === 'OUTPUT') {
+      const size = getNodeSize(node)
+      return {
+        ...node,
+        x: Math.max(view.width - size.width - OUTPUT_MARGIN, 0),
+        y: Math.max((view.height - size.height) / 2, 0),
+      }
+    }
+    return { ...node, ...clampNode(node, view) }
+  })
+}
+
 function App() {
   const [nodes, setNodes] = useState(DEFAULT_CIRCUIT.nodes)
   const [wires, setWires] = useState(DEFAULT_CIRCUIT.wires)
+
+  // Whether the top bar's File dropdown is open. Lifted up from TopBar so
+  // Escape can be told to close the menu first, before it touches wiring or
+  // selection.
+  const [fileMenuOpen, setFileMenuOpen] = useState(false)
 
   // Wiring: the node id whose output pin is armed, or null.
   const [connectFrom, setConnectFrom] = useState(null)
@@ -84,19 +107,7 @@ function App() {
   // OUTPUT node to the right edge, vertically centered. OUTPUT is the one
   // fixed fixture on the board, so it always sits in the same place.
   useEffect(() => {
-    setNodes((current) =>
-      current.map((node) => {
-        if (node.type === 'OUTPUT') {
-          const size = getNodeSize(node)
-          return {
-            ...node,
-            x: Math.max(view.width - size.width - OUTPUT_MARGIN, 0),
-            y: Math.max((view.height - size.height) / 2, 0),
-          }
-        }
-        return { ...node, ...clampNode(node, view) }
-      })
-    )
+    setNodes((current) => fitNodesToView(current, view))
   }, [view])
 
   // Screen coordinates -> workspace (viewBox) coordinates.
@@ -184,13 +195,16 @@ function App() {
     }
   }, [drag, toWorkspace, view])
 
-  // Escape cancels connecting mode first, or clears selection if nothing is
-  // being connected. Delete, Backspace and the letter D all remove whatever is
-  // selected. There are no text fields in the app, so D is safe as a shortcut.
+  // Escape closes the File menu first if it is open, otherwise cancels
+  // connecting mode, otherwise clears selection. Delete, Backspace and the
+  // letter D all remove whatever is selected. There are no text fields in
+  // the app, so D is safe as a shortcut.
   useEffect(() => {
     function handleKey(event) {
       if (event.key === 'Escape') {
-        if (connectFrom) {
+        if (fileMenuOpen) {
+          setFileMenuOpen(false)
+        } else if (connectFrom) {
           cancelConnect()
         } else if (selected) {
           setSelected(null)
@@ -198,6 +212,11 @@ function App() {
         return
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return
+      // Ignore keys typed into a button or the hidden file input, so the top
+      // bar's controls (and Enter/Space activating a focused button) never
+      // trigger the delete shortcut.
+      const tag = event.target && event.target.tagName
+      if (tag === 'BUTTON' || tag === 'INPUT') return
       const isDeleteKey =
         event.key === 'Delete' ||
         event.key === 'Backspace' ||
@@ -210,7 +229,7 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [connectFrom, selected])
+  }, [connectFrom, selected, fileMenuOpen])
 
   function cancelConnect() {
     setConnectFrom(null)
@@ -254,6 +273,29 @@ function App() {
       offsetX: point.x - node.x,
       offsetY: point.y - node.y,
     })
+  }
+
+  // True when the workspace has anything beyond the bare OUTPUT node, used
+  // to decide whether New needs to confirm before clearing.
+  const hasContent = nodes.length > 1 || wires.length > 0
+
+  // Resets to the blank sandbox. Also drops any in-progress wiring and
+  // selection, since both would otherwise point at nodes that no longer
+  // exist.
+  function handleNew() {
+    setNodes(fitNodesToView(EMPTY_CIRCUIT.nodes, view))
+    setWires(EMPTY_CIRCUIT.wires)
+    cancelConnect()
+    setSelected(null)
+  }
+
+  // Replaces the circuit with one loaded from a file. The file has already
+  // been validated by TopBar before this is called.
+  function handleLoadCircuit(data) {
+    setNodes(fitNodesToView(data.nodes, view))
+    setWires(data.wires)
+    cancelConnect()
+    setSelected(null)
   }
 
   function handleWireClick(wireId) {
@@ -301,41 +343,52 @@ function App() {
 
   return (
     <div className="app">
-      <div className="left-column">
-        <section className="panel palette-panel">
-          <h2 className="panel-title">Palette</h2>
-          <div className="panel-body">
-            <Palette onPaletteDragStart={handlePaletteDragStart} />
-          </div>
-        </section>
-      </div>
-      <div className="right-column">
-        <section className="panel canvas-panel">
-          <h2 className="panel-title">Canvas</h2>
-          <div className="panel-body">
-            <OutputCanvas nodes={nodes} wires={wires} />
-          </div>
-        </section>
-        <section className="panel workspace-panel">
-          <h2 className="panel-title">Workspace</h2>
-          <div className="panel-body">
-            <Workspace
-              svgRef={svgRef}
-              view={view}
-              nodes={nodes}
-              wires={wires}
-              connectFrom={connectFrom}
-              previewPoint={previewPoint}
-              selected={selected}
-              onBackgroundPointerDown={handleBackgroundPointerDown}
-              onSurfacePointerMove={handleSurfacePointerMove}
-              onNodeBodyPointerDown={handleNodeBodyPointerDown}
-              onOutputPinClick={handleOutputPinClick}
-              onInputPinClick={handleInputPinClick}
-              onWireClick={handleWireClick}
-            />
-          </div>
-        </section>
+      <TopBar
+        nodes={nodes}
+        wires={wires}
+        hasContent={hasContent}
+        onNew={handleNew}
+        onLoadCircuit={handleLoadCircuit}
+        menuOpen={fileMenuOpen}
+        onMenuOpenChange={setFileMenuOpen}
+      />
+      <div className="app-panels">
+        <div className="left-column">
+          <section className="panel palette-panel">
+            <h2 className="panel-title">Palette</h2>
+            <div className="panel-body">
+              <Palette onPaletteDragStart={handlePaletteDragStart} />
+            </div>
+          </section>
+        </div>
+        <div className="right-column">
+          <section className="panel canvas-panel">
+            <h2 className="panel-title">Canvas</h2>
+            <div className="panel-body">
+              <OutputCanvas nodes={nodes} wires={wires} />
+            </div>
+          </section>
+          <section className="panel workspace-panel">
+            <h2 className="panel-title">Workspace</h2>
+            <div className="panel-body">
+              <Workspace
+                svgRef={svgRef}
+                view={view}
+                nodes={nodes}
+                wires={wires}
+                connectFrom={connectFrom}
+                previewPoint={previewPoint}
+                selected={selected}
+                onBackgroundPointerDown={handleBackgroundPointerDown}
+                onSurfacePointerMove={handleSurfacePointerMove}
+                onNodeBodyPointerDown={handleNodeBodyPointerDown}
+                onOutputPinClick={handleOutputPinClick}
+                onInputPinClick={handleInputPinClick}
+                onWireClick={handleWireClick}
+              />
+            </div>
+          </section>
+        </div>
       </div>
       {drag && drag.kind === 'palette' && ghost && (
         <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }}>

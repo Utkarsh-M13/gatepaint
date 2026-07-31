@@ -109,6 +109,13 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 
 - Git repository initialized; full project committed as v0.1, the first working prototype.
 
+### 2026-07-31: Top bar with New / Save / Load / Export (Sonnet)
+
+- Slim top bar above the panels: GATEPAINT title left, actions right. New resets to the blank circuit (confirm if non-empty), Save downloads the circuit JSON, Load opens and validates a circuit file (types, wire references, ports), Export renders the painting via the engine into a 512x512 PNG download. No backend, no localStorage.
+- Keydown delete shortcuts ignore button/input targets so the bar cannot trigger deletions.
+- Verified: 29/29 tests, clean build, JSON round-trip script showed 0 pixel mismatches on the checkerboard and rejected five malformed inputs; DOM/accessibility check at 1440x900 confirmed layout with no overflow.
+- Follow-up: the four actions moved into a single File dropdown in the top bar (outside-click and Escape close it, Escape prioritizes menu-close over wiring-cancel while open; themed like the panels). Verified: 29/29 tests, clean build, accessibility-tree check.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.
