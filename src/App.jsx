@@ -30,6 +30,20 @@ function clamp(value, min, max) {
 // drag. Used to tell a marquee sweep apart from a plain click-to-deselect.
 const CLICK_SLOP = 4
 
+// Zoom limits and the per-step multiplier shared by the keys and the buttons.
+// Zoom scales the workspace group only; the SVG viewBox stays pinned to the
+// panel pixel size so getScreenCTM stays valid.
+const ZOOM_MIN = 0.4
+const ZOOM_MAX = 2.5
+const ZOOM_STEP = 1.2
+
+// The OUTPUT node is pinned to the right edge and vertically centered, which
+// is exactly where the floating zoom controls sit. On a short workspace the
+// vertical center rises into that corner and the two collide. Keep OUTPUT's
+// top no higher than this many pixels down so it always clears the controls
+// band (roughly 100px tall) while staying centered on any normal-height panel.
+const OUTPUT_TOP_RESERVE = 116
+
 // Normalized { x, y, width, height } rectangle from two corner points, so a
 // marquee works when dragged in any of the four directions.
 function rectFromPoints(ax, ay, bx, by) {
@@ -58,10 +72,15 @@ function fitNodesToView(nodes, view) {
   return nodes.map((node) => {
     if (node.type === 'OUTPUT') {
       const size = getNodeSize(node)
+      // Vertically centered, but never so high that it slides under the
+      // top-right zoom controls: hold its top at least OUTPUT_TOP_RESERVE down,
+      // then cap so it still fits inside a very short panel.
+      const centered = (view.height - size.height) / 2
+      const maxTop = Math.max(view.height - size.height, 0)
       return {
         ...node,
         x: Math.max(view.width - size.width - OUTPUT_MARGIN, 0),
-        y: Math.max((view.height - size.height) / 2, 0),
+        y: Math.min(Math.max(centered, OUTPUT_TOP_RESERVE), maxTop),
       }
     }
     return { ...node, ...clampNode(node, view) }
@@ -117,7 +136,50 @@ function App() {
   // constants from geometry.js are only the pre-measurement fallback.
   const [view, setView] = useState({ width: VIEW_WIDTH, height: VIEW_HEIGHT })
 
+  // Zoom scale and pan offset applied to the workspace group. At zoom=1,
+  // pan=0 the group transform is the identity, so everything reduces to the
+  // pre-zoom behavior exactly. Refs mirror the latest values so the pointer
+  // handlers (which run after render, outside React's closure) can read them.
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const zoomRef = useRef(1)
+  const panRef = useRef({ x: 0, y: 0 })
+  const viewRef = useRef(view)
+  useEffect(() => {
+    viewRef.current = view
+  }, [view])
+
   const svgRef = useRef(null)
+
+  // Steps the zoom by a multiplicative factor, clamped, keeping the center of
+  // the visible workspace fixed. A workspace point w maps to an SVG-viewport
+  // point s by s = pan + zoom*w, so w = (s - pan)/zoom. Holding the point under
+  // the viewport center c fixed across the change means
+  //   (c - pan0)/z0 = (c - pan1)/z1  ->  pan1 = c - z1*(c - pan0)/z0.
+  // Refs are updated synchronously so a handler firing before the next render
+  // still converts with the new zoom/pan.
+  const stepZoom = useCallback((factor) => {
+    const z0 = zoomRef.current
+    const next = clamp(z0 * factor, ZOOM_MIN, ZOOM_MAX)
+    if (next === z0) return
+    const p0 = panRef.current
+    const v = viewRef.current
+    const cx = v.width / 2
+    const cy = v.height / 2
+    const nx = cx - (next * (cx - p0.x)) / z0
+    const ny = cy - (next * (cy - p0.y)) / z0
+    zoomRef.current = next
+    panRef.current = { x: nx, y: ny }
+    setZoom(next)
+    setPan({ x: nx, y: ny })
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    zoomRef.current = 1
+    panRef.current = { x: 0, y: 0 }
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [])
 
   // Measure on mount and on every panel resize. setView keeps the previous
   // object when the size is unchanged so the reposition effect below does
@@ -148,7 +210,12 @@ function App() {
     setNodes((current) => fitNodesToView(current, view))
   }, [view])
 
-  // Screen coordinates -> workspace (viewBox) coordinates.
+  // Screen coordinates -> workspace coordinates. Two steps: first screen to
+  // SVG-viewport coordinates via the CTM inverse (the viewBox still tracks the
+  // panel pixel size, so this matrix stays valid under any zoom), then undo the
+  // workspace group's transform by subtracting pan and dividing by zoom. Every
+  // handler (drag, drop, marquee, wiring, context menu) goes through here, so
+  // they all stay consistent. At zoom=1, pan=0 this reduces to the CTM result.
   const toWorkspace = useCallback((clientX, clientY) => {
     const svg = svgRef.current
     if (!svg) return { x: 0, y: 0 }
@@ -158,7 +225,9 @@ function App() {
     point.x = clientX
     point.y = clientY
     const local = point.matrixTransform(ctm.inverse())
-    return { x: local.x, y: local.y }
+    const z = zoomRef.current
+    const p = panRef.current
+    return { x: (local.x - p.x) / z, y: (local.y - p.y) / z }
   }, [])
 
   // True only when the pointer is inside the drawn workspace area. The
@@ -340,6 +409,19 @@ function App() {
         return
       }
       if (event.altKey) return
+      // Zoom in on +/= (and numpad +), zoom out on -/_ (and numpad -). These
+      // are plain keys, so they sit clear of the Ctrl/Cmd clipboard chords and
+      // the bare-letter delete below.
+      if (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd') {
+        event.preventDefault()
+        stepZoom(ZOOM_STEP)
+        return
+      }
+      if (event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract') {
+        event.preventDefault()
+        stepZoom(1 / ZOOM_STEP)
+        return
+      }
       const isDeleteKey =
         event.key === 'Delete' ||
         event.key === 'Backspace' ||
@@ -639,6 +721,8 @@ function App() {
               <Workspace
                 svgRef={svgRef}
                 view={view}
+                zoom={zoom}
+                pan={pan}
                 nodes={nodes}
                 wires={wires}
                 connectFrom={connectFrom}
@@ -655,6 +739,43 @@ function App() {
                 onInputPinClick={handleInputPinClick}
                 onWireClick={handleWireClick}
               />
+              {/* Floating zoom controls, top-right, over the SVG. The wrapper
+                  passes pointer events through except on the buttons, so it
+                  never blocks node dragging or a marquee below it. Buttons
+                  suppress focus on mousedown so the keyboard zoom shortcuts
+                  keep working after a click. */}
+              <div className="zoom-controls">
+                <button
+                  type="button"
+                  className="zoom-btn"
+                  aria-label="Zoom in"
+                  title="Zoom in (+)"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => stepZoom(ZOOM_STEP)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="zoom-label"
+                  aria-label="Reset zoom to 100%"
+                  title="Reset to 100%"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={resetZoom}
+                >
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button
+                  type="button"
+                  className="zoom-btn"
+                  aria-label="Zoom out"
+                  title="Zoom out (-)"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => stepZoom(1 / ZOOM_STEP)}
+                >
+                  &minus;
+                </button>
+              </div>
             </div>
           </section>
         </div>

@@ -124,6 +124,13 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Pure helpers extracted and tested: getNodeBox/rectsOverlap/getNodesBounds in geometry.js, buildClipboard/remapClipboard in lib/clipboard.js with 6 new unit tests.
 - Verified: 35/35 tests (29 + 6 new), clean build, screenshot confirms the app renders with no overflow. Interaction logic verified by code review per the no-click-spam constraint.
 
+### 2026-07-31: Workspace zoom (Opus)
+
+- Zoom applied as an SVG group transform (translate + scale) inside the workspace, with a single screen->workspace helper that undoes pan and zoom so node drag, palette drop, wiring, marquee, and paste all stay accurate at any zoom (reduces to prior behavior at zoom=1). Zoom clamped 0.4x to 2.5x, zoom-about-center math.
+- Keyboard: +/=/NumpadAdd zoom in, -/_/NumpadSubtract zoom out (1.2x step), guarded against typing fields and the delete/clipboard shortcuts. On-screen: translucent outlined +/100%(reset)/- controls floating in the workspace top-right.
+- Fixed a collision where the vertically-centered OUTPUT node overlapped the controls in short panels: OUTPUT top reserve, workspace min-height, and higher z-index / more opaque backing on the controls.
+- Verified: 35/35 tests, clean build, screenshot confirms controls clear of OUTPUT, no overflow.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

@@ -14,6 +14,8 @@ import { getOutputPinPos } from '../lib/geometry.js';
 function Workspace({
   svgRef,
   view,
+  zoom = 1,
+  pan = { x: 0, y: 0 },
   nodes,
   wires,
   connectFrom,
@@ -44,7 +46,9 @@ function Workspace({
       onContextMenu={onWorkspaceContextMenu}
     >
       {/* Background catches clicks on empty space, which start a marquee sweep
-          (or, on a plain click, cancel connecting and clear the selection). */}
+          (or, on a plain click, cancel connecting and clear the selection).
+          It stays outside the zoom group and covers the whole viewport, so
+          empty space anywhere in the panel stays clickable at any zoom. */}
       <rect
         x={0}
         y={0}
@@ -53,6 +57,11 @@ function Workspace({
         className="workspace-background"
         onPointerDown={onBackgroundPointerDown}
       />
+      {/* Everything drawn in workspace coordinates lives inside this group.
+          The transform is pan then scale, matching s = pan + zoom*w, the exact
+          inverse of the screen->workspace conversion in App. At zoom=1, pan=0
+          it is the identity, so nothing moves relative to the old behavior. */}
+      <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
       {wires.map((wire) => (
         <Wire
           key={wire.id}
@@ -93,6 +102,7 @@ function Workspace({
           className="marquee"
         />
       )}
+      </g>
     </svg>
   );
 }
