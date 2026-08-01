@@ -82,7 +82,7 @@ function ReadoutStrip({ hovered }) {
 // the top and left edges. Each pixel is evaluated independently from the
 // circuit in nodes/wires. Row 0 is drawn at the top, so y runs top to
 // bottom, x runs left to right, matching bitsOf(x, y).
-function OutputCanvas({ nodes, wires }) {
+function OutputCanvas({ nodes, wires, gallery }) {
   const [hovered, setHovered] = useState(null);
 
   const pixels = [];
@@ -139,7 +139,10 @@ function OutputCanvas({ nodes, wires }) {
       </div>
       <aside className="canvas-side">
         <ReadoutStrip hovered={hovered} />
-        <HowToPlay />
+        <div className="canvas-side-lower">
+          <HowToPlay />
+          {gallery}
+        </div>
       </aside>
     </div>
   );

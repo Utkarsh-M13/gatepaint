@@ -145,6 +145,14 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Pure helpers findPinAtPoint/findGateAtPoint/isGateType in geometry.js and transferWiresForSwap in lib/swap.js, with 13 new unit tests.
 - Verified: 54/54 tests (41 + 13), clean build, screenshot confirms render with no overflow. Interaction coexistence verified by code review and helper tests per the no-click-spam constraint.
 
+### 2026-07-31: Circuit gallery in the canvas sidebar (Opus)
+
+- Gallery panel added beside Instructions in a widened canvas sidebar. Three tabs: New (coming-soon placeholder, no backend), Saved (localStorage), Featured (bundled presets), defaulting to Featured. 2x2 thumbnail grid with prev/next pagination; each thumbnail renders the circuit's painting via the engine.
+- Clicking a thumbnail opens a themed modal with an enlarged painting, the name, an Open in Workspace button (confirms if the workspace is non-empty, mints fresh ids, fits nodes, resets zoom/pan), and Delete for saved items. Escape/backdrop/X close it.
+- Featured set of 6 (Vertical Stripes, Left Half, Checkerboard, Quadrants, Outer Frame, Plaid), Frame/Plaid built programmatically. Saved store persists to localStorage key gatepaint.saved.v1 with validation; Save current button on the Saved tab prompts for a name. Existing File > Save (download) untouched.
+- New pure modules: lib/renderCircuit.js, featured.js, lib/savedStore.js, plus CircuitThumbnail and Gallery components, with 18 new unit tests (featured renders match formulas, saved-store validate/round-trip).
+- Verified: 72/72 tests (54 + 18), clean build, screenshot confirms the gallery, thumbnails, pagination, and the enlarge modal with Open in Workspace, no overflow at 1440x900.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

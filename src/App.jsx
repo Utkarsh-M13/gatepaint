@@ -23,6 +23,7 @@ import { buildClipboard, remapClipboard } from './lib/clipboard.js'
 import Palette from './components/Palette.jsx'
 import Workspace from './components/Workspace.jsx'
 import OutputCanvas from './components/OutputCanvas.jsx'
+import Gallery from './components/Gallery.jsx'
 import TopBar from './components/TopBar.jsx'
 
 let idCounter = 0
@@ -838,6 +839,39 @@ function App() {
     clearSelection()
   }
 
+  // Loads a circuit (from the gallery) into the workspace, minting fresh node
+  // and wire ids so a preset's baked-in ids can never collide with existing or
+  // future ones. OUTPUT is re-pinned by fitNodesToView; zoom and pan are reset
+  // to the identity view so the loaded circuit lands where it was authored.
+  function loadFreshCircuit(circuit) {
+    const idMap = new Map()
+    const freshNodes = circuit.nodes.map((node) => {
+      const id = nextId('n')
+      idMap.set(node.id, id)
+      return { ...node, id }
+    })
+    const freshWires = circuit.wires.map((wire) => ({
+      id: nextId('w'),
+      from: idMap.get(wire.from),
+      to: idMap.get(wire.to),
+      toPort: wire.toPort === 1 ? 1 : 0,
+    }))
+    setNodes(fitNodesToView(freshNodes, view))
+    setWires(freshWires)
+    resetZoom()
+    cancelConnect()
+    clearSelection()
+  }
+
+  // Gallery "Open in Workspace". Confirms an overwrite exactly like New does
+  // when the board is non-empty, then loads. Returns whether the load happened
+  // so the gallery can keep its enlarged view open on a cancel.
+  function handleOpenInWorkspace(circuit) {
+    if (hasContent && !window.confirm('Clear the current circuit?')) return false
+    loadFreshCircuit(circuit)
+    return true
+  }
+
   function handleWireClick(wireId) {
     setSelectedWireId(wireId)
     setSelectedNodeIds(new Set())
@@ -1081,7 +1115,16 @@ function App() {
           <section className="panel canvas-panel">
             <h2 className="panel-title">Canvas</h2>
             <div className="panel-body">
-              <OutputCanvas nodes={nodes} wires={wires} />
+              <OutputCanvas
+                nodes={nodes}
+                wires={wires}
+                gallery={
+                  <Gallery
+                    currentCircuit={{ nodes, wires }}
+                    onOpenInWorkspace={handleOpenInWorkspace}
+                  />
+                }
+              />
             </div>
           </section>
           <section className="panel workspace-panel">
