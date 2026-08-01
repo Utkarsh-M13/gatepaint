@@ -50,6 +50,43 @@ export function getNodeSize(node) {
   return GATE_SIZE;
 }
 
+// A node's bounding box as { x, y, width, height }. The box is the same
+// rectangle used for clamping, hit-testing and marquee intersection.
+export function getNodeBox(node) {
+  const { width, height } = getNodeSize(node);
+  return { x: node.x, y: node.y, width, height };
+}
+
+// Axis-aligned rectangle overlap test. Both args are { x, y, width, height }.
+// Touching edges do not count as an overlap, which matches how a marquee that
+// merely grazes a node's edge should not sweep it in.
+export function rectsOverlap(a, b) {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+// The bounding box that encloses every node in the list, or null for an empty
+// list. Used to center a pasted group under the cursor.
+export function getNodesBounds(nodes) {
+  if (!nodes.length) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const node of nodes) {
+    const box = getNodeBox(node);
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
 // How many input ports a node has. INPUT nodes have none (they are sources).
 // NOT and OUTPUT read a single port. AND/OR/XOR/NAND read two.
 export function getPortCount(node) {

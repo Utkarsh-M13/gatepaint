@@ -15,7 +15,8 @@ import { gateSymbol } from '../lib/symbols.js';
 //
 // The symbol body starts a drag. The pins do not: they stop the pointerdown
 // so a click on a pin stays a click, which is what the wiring needs.
-function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onOutputPinClick, onInputPinClick }) {
+function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onContextMenu, onOutputPinClick, onInputPinClick }) {
+  const handleContextMenu = (event) => onContextMenu(node, event);
   const { width, height } = getNodeSize(node);
   const portCount = getPortCount(node);
   const inputPins = Array.from({ length: portCount }, (_, port) =>
@@ -41,6 +42,7 @@ function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onOutp
           rx={node.type === 'INPUT' ? height / 2 : 3}
           className={boxClass}
           onPointerDown={(event) => onBodyPointerDown(node, event)}
+          onContextMenu={handleContextMenu}
         />
       ) : (
         <>
@@ -49,12 +51,14 @@ function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onOutp
               d={symbol.tail}
               className={isSelected ? 'gate-node-tail selected' : 'gate-node-tail'}
               onPointerDown={(event) => onBodyPointerDown(node, event)}
+              onContextMenu={handleContextMenu}
             />
           )}
           <path
             d={symbol.body}
             className={boxClass}
             onPointerDown={(event) => onBodyPointerDown(node, event)}
+            onContextMenu={handleContextMenu}
           />
         </>
       )}

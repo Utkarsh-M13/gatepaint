@@ -18,10 +18,14 @@ function Workspace({
   wires,
   connectFrom,
   previewPoint,
-  selected,
+  selectedNodeIds,
+  selectedWireId,
+  marqueeRect,
   onBackgroundPointerDown,
   onSurfacePointerMove,
   onNodeBodyPointerDown,
+  onNodeContextMenu,
+  onWorkspaceContextMenu,
   onOutputPinClick,
   onInputPinClick,
   onWireClick,
@@ -37,8 +41,10 @@ function Workspace({
       viewBox={`0 0 ${view.width} ${view.height}`}
       preserveAspectRatio="xMidYMid meet"
       onPointerMove={onSurfacePointerMove}
+      onContextMenu={onWorkspaceContextMenu}
     >
-      {/* Background catches clicks on empty space, which cancel connecting. */}
+      {/* Background catches clicks on empty space, which start a marquee sweep
+          (or, on a plain click, cancel connecting and clear the selection). */}
       <rect
         x={0}
         y={0}
@@ -52,7 +58,7 @@ function Workspace({
           key={wire.id}
           wire={wire}
           nodesById={nodesById}
-          isSelected={selected?.kind === 'wire' && selected.id === wire.id}
+          isSelected={selectedWireId === wire.id}
           onSelect={onWireClick}
         />
       ))}
@@ -70,12 +76,23 @@ function Workspace({
           key={node.id}
           node={node}
           isConnectSource={node.id === connectFrom}
-          isSelected={selected?.kind === 'node' && selected.id === node.id}
+          isSelected={selectedNodeIds.has(node.id)}
           onBodyPointerDown={onNodeBodyPointerDown}
+          onContextMenu={onNodeContextMenu}
           onOutputPinClick={onOutputPinClick}
           onInputPinClick={onInputPinClick}
         />
       ))}
+      {/* Rubber-band rectangle, drawn on top so it reads over the nodes. */}
+      {marqueeRect && (
+        <rect
+          x={marqueeRect.x}
+          y={marqueeRect.y}
+          width={marqueeRect.width}
+          height={marqueeRect.height}
+          className="marquee"
+        />
+      )}
     </svg>
   );
 }

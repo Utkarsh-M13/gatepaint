@@ -117,6 +117,13 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Follow-up: the four actions moved into a single File dropdown in the top bar (outside-click and Escape close it, Escape prioritizes menu-close over wiring-cancel while open; themed like the panels). Verified: 29/29 tests, clean build, accessibility-tree check.
 - Follow-up: restyled the File control as a classic desktop menubar. File is now a flat text menu label (no button chrome) that inverts to amber when open/hovered; the menu is a squared bordered panel flush under the label with full-width inverted-bar item selection and a separator above Export. Handlers unchanged. Verified: 29/29 tests, clean build, screenshot confirms the menubar look.
 
+### 2026-07-31: Box select + context menu with clipboard (Opus)
+
+- Generalized selection from single to multi: selectedNodeIds (Set, never OUTPUT) plus selectedWireId. Marquee box select on empty-background drag draws a semi-transparent amber rect and selects every intersecting selectable node; a plain click still clears selection. Dragging any selected node moves the whole set together; Delete/Backspace/D removes all selected nodes and touching wires.
+- Right-click context menu (native menu suppressed) with Copy, Cut, Paste, Delete, styled like the File menu. Copy/Cut/Delete greyed unless something is selected; Paste greyed unless the in-memory clipboard has content. Copy grabs selected nodes plus internal wires; Cut copies then deletes; Paste mints fresh ids, remaps internal wires, offsets/centers at the cursor, and selects the new nodes. Ctrl/Cmd+C/X/V shortcuts too. Escape priority: context menu, then File menu, then connecting, then selection.
+- Pure helpers extracted and tested: getNodeBox/rectsOverlap/getNodesBounds in geometry.js, buildClipboard/remapClipboard in lib/clipboard.js with 6 new unit tests.
+- Verified: 35/35 tests (29 + 6 new), clean build, screenshot confirms the app renders with no overflow. Interaction logic verified by code review per the no-click-spam constraint.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

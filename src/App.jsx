@@ -3,10 +3,14 @@ import './App.css'
 import { DEFAULT_CIRCUIT, EMPTY_CIRCUIT } from './circuits.js'
 import {
   getNodeSize,
+  getNodeBox,
+  getNodesBounds,
+  rectsOverlap,
   OUTPUT_MARGIN,
   VIEW_WIDTH,
   VIEW_HEIGHT,
 } from './lib/geometry.js'
+import { buildClipboard, remapClipboard } from './lib/clipboard.js'
 import Palette from './components/Palette.jsx'
 import Workspace from './components/Workspace.jsx'
 import OutputCanvas from './components/OutputCanvas.jsx'
@@ -20,6 +24,21 @@ function nextId(prefix) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
+}
+
+// A pointer moved less than this many screen pixels counts as a click, not a
+// drag. Used to tell a marquee sweep apart from a plain click-to-deselect.
+const CLICK_SLOP = 4
+
+// Normalized { x, y, width, height } rectangle from two corner points, so a
+// marquee works when dragged in any of the four directions.
+function rectFromPoints(ax, ay, bx, by) {
+  return {
+    x: Math.min(ax, bx),
+    y: Math.min(ay, by),
+    width: Math.abs(ax - bx),
+    height: Math.abs(ay - by),
+  }
 }
 
 // Keeps a node fully inside a view of the given size. Used both while
@@ -63,15 +82,34 @@ function App() {
   // Cursor position in workspace coordinates, for the preview line.
   const [previewPoint, setPreviewPoint] = useState(null)
 
-  // Selection: at most one thing selected at a time, a gate node or a wire.
-  // { kind: 'node', id } | { kind: 'wire', id } | null.
-  const [selected, setSelected] = useState(null)
+  // Selection is now a set of node ids plus, separately, at most one wire.
+  // Nodes and wires are still mutually exclusive: selecting either clears the
+  // other. OUTPUT is never put in the node set. Using a Set keeps membership
+  // tests cheap while every selected node shows the same amber highlight.
+  const [selectedNodeIds, setSelectedNodeIds] = useState(() => new Set())
+  const [selectedWireId, setSelectedWireId] = useState(null)
 
-  // Active drag. Either a gate being dragged out of the palette, or an
-  // existing node being moved. Null when nothing is being dragged.
+  // In-memory clipboard for copy/cut/paste. Holds deep copies of nodes and
+  // their internal wires, or null when empty. Never touches the OS clipboard.
+  const [clipboard, setClipboard] = useState(null)
+
+  // Right-click context menu: its screen position (for placing the dropdown)
+  // and its workspace position (where a Paste drops the group), or null.
+  const [contextMenu, setContextMenu] = useState(null)
+  const contextMenuRef = useRef(null)
+
+  // Active drag. Either a gate being dragged out of the palette, or one or
+  // more existing nodes being moved together. Null when nothing is dragging.
   const [drag, setDrag] = useState(null)
   // Cursor position in screen coordinates, for the palette drag ghost.
   const [ghost, setGhost] = useState(null)
+
+  // Marquee (box) select. `marquee` holds the stable start of the sweep so the
+  // move/up effect below has one identity to key on; `marqueeCur` carries the
+  // live corner (and whether it has passed the click threshold) and updates on
+  // every pointer move so the rubber-band rectangle can follow the cursor.
+  const [marquee, setMarquee] = useState(null)
+  const [marqueeCur, setMarqueeCur] = useState(null)
 
   // The workspace viewBox size, measured from the SVG element itself so that
   // one user unit is exactly one CSS pixel. That keeps the drawing at a 1:1
@@ -154,15 +192,17 @@ function App() {
         setGhost({ x: event.clientX, y: event.clientY })
         return
       }
+      // Move every node in the drag by the same delta from where the drag
+      // began, so a multi-selection translates as one rigid group. Each node
+      // is still clamped on its own so none escapes the view.
       const point = toWorkspace(event.clientX, event.clientY)
+      const dx = point.x - drag.origin.x
+      const dy = point.y - drag.origin.y
       setNodes((current) =>
         current.map((node) => {
-          if (node.id !== drag.nodeId) return node
-          const moved = {
-            ...node,
-            x: point.x - drag.offsetX,
-            y: point.y - drag.offsetY,
-          }
+          const start = drag.starts.get(node.id)
+          if (!start) return node
+          const moved = { ...node, x: start.x + dx, y: start.y + dy }
           return { ...moved, ...clampNode(moved, view) }
         })
       )
@@ -195,61 +235,190 @@ function App() {
     }
   }, [drag, toWorkspace, view])
 
-  // Escape closes the File menu first if it is open, otherwise cancels
-  // connecting mode, otherwise clears selection. Delete, Backspace and the
-  // letter D all remove whatever is selected. There are no text fields in
-  // the app, so D is safe as a shortcut.
+  // Marquee sweep. Driven off window listeners like the node drag so the
+  // pointer can leave the SVG mid-sweep. `marquee` (the start) is stable for
+  // the whole gesture, so this effect registers once per sweep, not per move.
+  useEffect(() => {
+    if (!marquee) return undefined
+
+    function handleMove(event) {
+      const point = toWorkspace(event.clientX, event.clientY)
+      const moved =
+        Math.abs(event.clientX - marquee.startClientX) > CLICK_SLOP ||
+        Math.abs(event.clientY - marquee.startClientY) > CLICK_SLOP
+      setMarqueeCur({ x: point.x, y: point.y, moved })
+    }
+
+    function handleUp(event) {
+      const moved =
+        Math.abs(event.clientX - marquee.startClientX) > CLICK_SLOP ||
+        Math.abs(event.clientY - marquee.startClientY) > CLICK_SLOP
+      if (moved) {
+        // Select every selectable node whose box overlaps the swept rect.
+        const point = toWorkspace(event.clientX, event.clientY)
+        const rect = rectFromPoints(marquee.startX, marquee.startY, point.x, point.y)
+        const hits = nodes
+          .filter((node) => node.type !== 'OUTPUT' && rectsOverlap(getNodeBox(node), rect))
+          .map((node) => node.id)
+        setSelectedNodeIds(new Set(hits))
+        setSelectedWireId(null)
+      } else {
+        // A plain click on empty space clears the selection, as before.
+        setSelectedNodeIds(new Set())
+        setSelectedWireId(null)
+      }
+      setMarquee(null)
+      setMarqueeCur(null)
+    }
+
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+    }
+  }, [marquee, nodes, toWorkspace])
+
+  // Closes the context menu on any pointerdown outside it. Kept separate from
+  // the menu's own item handlers, which close it directly on activation.
+  useEffect(() => {
+    if (!contextMenu) return undefined
+    function handlePointerDown(event) {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
+        setContextMenu(null)
+      }
+    }
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [contextMenu])
+
+  // Escape closes the context menu first, then the File menu, then cancels
+  // connecting mode, then clears selection. Delete, Backspace and the letter D
+  // all remove whatever is selected. Ctrl/Cmd+C/X/V drive the clipboard. There
+  // are no text fields in the app, so the bare-letter shortcuts are safe.
   useEffect(() => {
     function handleKey(event) {
       if (event.key === 'Escape') {
-        if (fileMenuOpen) {
+        if (contextMenu) {
+          setContextMenu(null)
+        } else if (fileMenuOpen) {
           setFileMenuOpen(false)
         } else if (connectFrom) {
           cancelConnect()
-        } else if (selected) {
-          setSelected(null)
+        } else if (selectedNodeIds.size > 0 || selectedWireId) {
+          clearSelection()
         }
         return
       }
-      if (event.ctrlKey || event.metaKey || event.altKey) return
       // Ignore keys typed into a button or the hidden file input, so the top
       // bar's controls (and Enter/Space activating a focused button) never
-      // trigger the delete shortcut.
+      // trigger a workspace shortcut.
       const tag = event.target && event.target.tagName
-      if (tag === 'BUTTON' || tag === 'INPUT') return
+      const typing = tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA'
+      if (typing) return
+      // Clipboard shortcuts. Guarded to the plain Ctrl/Cmd chord so they never
+      // clash with the bare-letter delete below.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+        const key = event.key.toLowerCase()
+        if (key === 'c') {
+          event.preventDefault()
+          copySelection()
+          return
+        }
+        if (key === 'x') {
+          event.preventDefault()
+          cutSelection()
+          return
+        }
+        if (key === 'v') {
+          event.preventDefault()
+          pasteClipboard(null)
+          return
+        }
+        return
+      }
+      if (event.altKey) return
       const isDeleteKey =
         event.key === 'Delete' ||
         event.key === 'Backspace' ||
         event.key === 'd' ||
         event.key === 'D'
-      if (isDeleteKey && selected) {
+      if (isDeleteKey && (selectedNodeIds.size > 0 || selectedWireId)) {
         event.preventDefault()
         deleteSelected()
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [connectFrom, selected, fileMenuOpen])
+  }, [connectFrom, selectedNodeIds, selectedWireId, clipboard, fileMenuOpen, contextMenu, nodes, wires])
 
   function cancelConnect() {
     setConnectFrom(null)
     setPreviewPoint(null)
   }
 
-  // Removes whatever is currently selected. A node takes its wires with it
-  // (anything touching it, in either direction). The OUTPUT node is never
-  // selectable, so it can never reach this function.
+  function clearSelection() {
+    setSelectedNodeIds(new Set())
+    setSelectedWireId(null)
+  }
+
+  // Removes everything selected: all selected nodes (OUTPUT is never in the
+  // set) plus every wire touching any of them, and the selected wire if any.
   function deleteSelected() {
-    if (!selected) return
-    if (selected.kind === 'node') {
-      const nodeId = selected.id
-      setNodes((current) => current.filter((node) => node.id !== nodeId))
-      setWires((current) => current.filter((wire) => wire.from !== nodeId && wire.to !== nodeId))
-    } else if (selected.kind === 'wire') {
-      const wireId = selected.id
+    if (selectedWireId) {
+      const wireId = selectedWireId
       setWires((current) => current.filter((wire) => wire.id !== wireId))
     }
-    setSelected(null)
+    if (selectedNodeIds.size > 0) {
+      const ids = selectedNodeIds
+      setNodes((current) => current.filter((node) => node.type === 'OUTPUT' || !ids.has(node.id)))
+      setWires((current) => current.filter((wire) => !ids.has(wire.from) && !ids.has(wire.to)))
+    }
+    clearSelection()
+  }
+
+  // Copy: snapshot the selected nodes and their internal wires into the
+  // clipboard. Selection is left untouched. Returns the payload so Cut can
+  // reuse it without depending on the async clipboard state update.
+  function copySelection() {
+    const payload = buildClipboard(nodes, wires, selectedNodeIds)
+    if (!payload) return null
+    setClipboard(payload)
+    return payload
+  }
+
+  // Cut: copy, then delete the copied nodes and their touching wires.
+  function cutSelection() {
+    const payload = copySelection()
+    if (!payload) return
+    const ids = new Set(payload.nodes.map((node) => node.id))
+    setNodes((current) => current.filter((node) => node.type === 'OUTPUT' || !ids.has(node.id)))
+    setWires((current) => current.filter((wire) => !ids.has(wire.from) && !ids.has(wire.to)))
+    clearSelection()
+  }
+
+  // Paste: drop fresh copies of the clipboard with new ids. With a target
+  // point (from the context menu) the group is centered there; otherwise it is
+  // nudged down-right off the originals. The pasted nodes become the selection
+  // so they can be dragged immediately. Each is clamped into the view.
+  function pasteClipboard(target) {
+    if (!clipboard || clipboard.nodes.length === 0) return
+    let offset = { dx: 24, dy: 24 }
+    if (target) {
+      const bounds = getNodesBounds(clipboard.nodes)
+      offset = {
+        dx: target.x - (bounds.x + bounds.width / 2),
+        dy: target.y - (bounds.y + bounds.height / 2),
+      }
+    }
+    const remapped = remapClipboard(clipboard, nextId, offset)
+    const placed = remapped.nodes.map((node) => ({ ...node, ...clampNode(node, view) }))
+    setNodes((current) => [...current, ...placed])
+    setWires((current) => [...current, ...remapped.wires])
+    setSelectedNodeIds(new Set(remapped.newNodeIds))
+    setSelectedWireId(null)
   }
 
   // A palette item is { type, label }: a gate type, or INPUT with a bit label.
@@ -259,19 +428,78 @@ function App() {
   }
 
   // Pointerdown on a node's body starts a move. Pins stop the event before it
-  // gets here, so clicking a pin never starts a drag. The same click also
-  // selects the node, since a drag always begins with a click. The OUTPUT node
-  // is the one fixed piece and is never selectable/deletable.
+  // gets here, so clicking a pin never starts a drag. Only the primary (left)
+  // button drags; right-click is left for the context menu.
+  //
+  // Selection rules: a bare click on an unselected node selects just it; a
+  // click on a node already in the multi-selection keeps the whole set and
+  // drags it together; Shift+click toggles a node in or out of the set without
+  // dragging. OUTPUT is the one fixed piece, never selectable, and dragging it
+  // clears the selection.
   function handleNodeBodyPointerDown(node, event) {
+    if (event.button !== 0) return
     event.stopPropagation()
-    const isDeletable = node.type !== 'OUTPUT'
-    setSelected(isDeletable ? { kind: 'node', id: node.id } : null)
+
+    if (event.shiftKey && node.type !== 'OUTPUT') {
+      setSelectedNodeIds((current) => {
+        const next = new Set(current)
+        if (next.has(node.id)) next.delete(node.id)
+        else next.add(node.id)
+        return next
+      })
+      setSelectedWireId(null)
+      return
+    }
+
+    // Decide which nodes this drag moves and settle the selection to match.
+    let idsToMove
+    if (node.type === 'OUTPUT') {
+      clearSelection()
+      idsToMove = [node.id]
+    } else if (selectedNodeIds.has(node.id)) {
+      idsToMove = [...selectedNodeIds]
+    } else {
+      setSelectedNodeIds(new Set([node.id]))
+      setSelectedWireId(null)
+      idsToMove = [node.id]
+    }
+
     const point = toWorkspace(event.clientX, event.clientY)
-    setDrag({
-      kind: 'node',
-      nodeId: node.id,
-      offsetX: point.x - node.x,
-      offsetY: point.y - node.y,
+    const moveSet = new Set(idsToMove)
+    const starts = new Map(
+      nodes.filter((n) => moveSet.has(n.id)).map((n) => [n.id, { x: n.x, y: n.y }])
+    )
+    setDrag({ kind: 'node', origin: { x: point.x, y: point.y }, starts })
+  }
+
+  // Right-click on a node: if it is not already part of the selection, select
+  // just it so the menu acts on it; if it is already in the set, keep the set.
+  // OUTPUT is never selectable, so a right-click on it leaves the selection be.
+  function handleNodeContextMenu(node, event) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (node.type !== 'OUTPUT' && !selectedNodeIds.has(node.id)) {
+      setSelectedNodeIds(new Set([node.id]))
+      setSelectedWireId(null)
+    }
+    openContextMenu(event)
+  }
+
+  // Right-click on empty workspace (or a wire): keep the current selection.
+  function handleWorkspaceContextMenu(event) {
+    event.preventDefault()
+    openContextMenu(event)
+  }
+
+  function openContextMenu(event) {
+    setFileMenuOpen(false)
+    cancelConnect()
+    const point = toWorkspace(event.clientX, event.clientY)
+    setContextMenu({
+      screenX: event.clientX,
+      screenY: event.clientY,
+      workspaceX: point.x,
+      workspaceY: point.y,
     })
   }
 
@@ -286,7 +514,7 @@ function App() {
     setNodes(fitNodesToView(EMPTY_CIRCUIT.nodes, view))
     setWires(EMPTY_CIRCUIT.wires)
     cancelConnect()
-    setSelected(null)
+    clearSelection()
   }
 
   // Replaces the circuit with one loaded from a file. The file has already
@@ -295,16 +523,29 @@ function App() {
     setNodes(fitNodesToView(data.nodes, view))
     setWires(data.wires)
     cancelConnect()
-    setSelected(null)
+    clearSelection()
   }
 
   function handleWireClick(wireId) {
-    setSelected({ kind: 'wire', id: wireId })
+    setSelectedWireId(wireId)
+    setSelectedNodeIds(new Set())
   }
 
-  function handleBackgroundPointerDown() {
+  // Pointerdown on empty background begins a marquee sweep. Only the primary
+  // button, so a right-click falls through to the context menu instead. The
+  // sweep's up handler decides between a box-select and a plain click (which
+  // clears the selection); either way connecting mode is cancelled here.
+  function handleBackgroundPointerDown(event) {
+    if (event.button !== 0) return
     cancelConnect()
-    setSelected(null)
+    const point = toWorkspace(event.clientX, event.clientY)
+    setMarquee({
+      startX: point.x,
+      startY: point.y,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+    })
+    setMarqueeCur({ x: point.x, y: point.y, moved: false })
   }
 
   function handleSurfacePointerMove(event) {
@@ -317,7 +558,7 @@ function App() {
   function handleOutputPinClick(node) {
     setConnectFrom(node.id)
     setPreviewPoint(null)
-    setSelected(null)
+    clearSelection()
   }
 
   // Clicking an input pin while armed lands the wire. An input pin holds one
@@ -339,6 +580,30 @@ function App() {
       { id: nextId('w'), from, to: node.id, toPort: port },
     ])
     cancelConnect()
+  }
+
+  // The rubber-band rectangle to draw, only once the sweep has moved past the
+  // click threshold so a plain click never flashes a zero-size box.
+  const marqueeRect =
+    marquee && marqueeCur && marqueeCur.moved
+      ? rectFromPoints(marquee.startX, marquee.startY, marqueeCur.x, marqueeCur.y)
+      : null
+
+  const hasNodeSelection = selectedNodeIds.size > 0
+  const canPaste = !!clipboard && clipboard.nodes.length > 0
+
+  // Runs a context-menu action then closes the menu. Copy/Cut/Delete no-op
+  // when nothing is selected; Paste no-ops with an empty clipboard, but the
+  // menu items are disabled in those cases so this is belt and braces.
+  function runMenuAction(action) {
+    if (action === 'copy') copySelection()
+    else if (action === 'cut') cutSelection()
+    else if (action === 'paste') {
+      pasteClipboard(
+        contextMenu ? { x: contextMenu.workspaceX, y: contextMenu.workspaceY } : null
+      )
+    } else if (action === 'delete') deleteSelected()
+    setContextMenu(null)
   }
 
   return (
@@ -378,10 +643,14 @@ function App() {
                 wires={wires}
                 connectFrom={connectFrom}
                 previewPoint={previewPoint}
-                selected={selected}
+                selectedNodeIds={selectedNodeIds}
+                selectedWireId={selectedWireId}
+                marqueeRect={marqueeRect}
                 onBackgroundPointerDown={handleBackgroundPointerDown}
                 onSurfacePointerMove={handleSurfacePointerMove}
                 onNodeBodyPointerDown={handleNodeBodyPointerDown}
+                onNodeContextMenu={handleNodeContextMenu}
+                onWorkspaceContextMenu={handleWorkspaceContextMenu}
                 onOutputPinClick={handleOutputPinClick}
                 onInputPinClick={handleInputPinClick}
                 onWireClick={handleWireClick}
@@ -394,6 +663,54 @@ function App() {
         <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }}>
           {drag.item.label}
         </div>
+      )}
+      {contextMenu && (
+        <ul
+          ref={contextMenuRef}
+          className="context-menu"
+          style={{ left: contextMenu.screenX, top: contextMenu.screenY }}
+        >
+          <li>
+            <button
+              type="button"
+              className="top-bar-menu-item"
+              disabled={!hasNodeSelection}
+              onClick={() => runMenuAction('copy')}
+            >
+              Copy
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="top-bar-menu-item"
+              disabled={!hasNodeSelection}
+              onClick={() => runMenuAction('cut')}
+            >
+              Cut
+            </button>
+          </li>
+          <li className="top-bar-menu-separator">
+            <button
+              type="button"
+              className="top-bar-menu-item"
+              disabled={!canPaste}
+              onClick={() => runMenuAction('paste')}
+            >
+              Paste
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="top-bar-menu-item"
+              disabled={!hasNodeSelection}
+              onClick={() => runMenuAction('delete')}
+            >
+              Delete
+            </button>
+          </li>
+        </ul>
       )}
     </div>
   )

@@ -119,6 +119,37 @@
   display: none;
 }
 
+/* Disabled menu items read as greyed and inert: dimmed text, no cursor, and
+   no amber hover bar. Shared by the File menu and the workspace context menu,
+   though only the context menu currently disables items. */
+.top-bar-menu-item:disabled {
+  color: var(--text);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.top-bar-menu-item:disabled:hover,
+.top-bar-menu-item:disabled:focus-visible {
+  color: var(--text);
+  background: none;
+}
+
+/* Right-click context menu in the workspace. Same squared, hairline-bordered
+   panel as the File dropdown, reusing its item classes, but positioned free
+   at the cursor rather than anchored under a menu label. */
+.context-menu {
+  position: fixed;
+  z-index: 30;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
 .app-panels {
   flex: 1;
   min-height: 0;
@@ -546,6 +577,16 @@
 /* Filled so the droppable surface is visible against the panel. */
 .workspace-background {
   fill: var(--bg);
+}
+
+/* Rubber-band marquee: a low-opacity amber wash with a 1px accent edge. It
+   never eats pointer events so the sweep underneath keeps updating. */
+.marquee {
+  fill: var(--accent);
+  fill-opacity: 0.12;
+  stroke: var(--accent);
+  stroke-width: 1;
+  pointer-events: none;
 }
 
 /* Gate symbols: flat dark fill, crisp hairline, same recipe as the palette
