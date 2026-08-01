@@ -631,9 +631,57 @@
   touch-action: none;
 }
 
+/* Panning mode cursors. Space held shows an open grab hand over the whole
+   surface; while a pan drag is in flight it closes to grabbing. Applied to the
+   SVG so it wins over the per-shape grab cursors on gates and pins too. */
+.workspace-svg.pan-ready,
+.workspace-svg.pan-ready * {
+  cursor: grab;
+}
+
+.workspace-svg.is-panning,
+.workspace-svg.is-panning * {
+  cursor: grabbing;
+}
+
 /* Filled so the droppable surface is visible against the panel. */
 .workspace-background {
   fill: var(--bg);
+}
+
+/* Off-screen OUTPUT marker. An amber, semi-translucent chip pinned to the
+   panel edge (positioned by inline left/top, centered on that point) pointing
+   toward the OUTPUT node. Sits in the same top-right band as the zoom
+   controls but anywhere along the border, so it uses the accent fill to read
+   as the one live wayfinding cue. */
+.output-indicator {
+  position: absolute;
+  z-index: 20;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--bg);
+  background: rgba(224, 101, 79, 0.82);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.output-indicator:hover {
+  background: var(--accent);
+}
+
+/* The arrow glyph is rotated inline to point along the line to OUTPUT. */
+.output-indicator-arrow {
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* Rubber-band marquee: a low-opacity amber wash with a 1px accent edge. It

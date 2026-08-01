@@ -16,6 +16,7 @@ function Workspace({
   view,
   zoom = 1,
   pan = { x: 0, y: 0 },
+  cursorClass = '',
   nodes,
   wires,
   connectFrom,
@@ -39,7 +40,7 @@ function Workspace({
   return (
     <svg
       ref={svgRef}
-      className="workspace-svg"
+      className={`workspace-svg${cursorClass ? ` ${cursorClass}` : ''}`}
       viewBox={`0 0 ${view.width} ${view.height}`}
       preserveAspectRatio="xMidYMid meet"
       onPointerMove={onSurfacePointerMove}

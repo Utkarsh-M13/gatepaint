@@ -6,6 +6,8 @@ import {
   getNodeBox,
   getNodesBounds,
   rectsOverlap,
+  zoomAboutPoint,
+  getOffscreenIndicator,
   OUTPUT_MARGIN,
   VIEW_WIDTH,
   VIEW_HEIGHT,
@@ -149,31 +151,53 @@ function App() {
     viewRef.current = view
   }, [view])
 
+  // While Space is held the workspace enters panning mode: the cursor shows a
+  // grab hand and a left-drag moves the view instead of starting a marquee.
+  // The ref mirrors it so the pointer handlers (which run outside React's
+  // closure) can read the latest value; the state only drives the cursor.
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  const spaceHeldRef = useRef(false)
+
+  // Measured size of the off-screen OUTPUT chip, so its full bounding box can
+  // be clamped inside the panel (it is centered on its anchor point, so half of
+  // it would otherwise spill past whichever edge it pins to). The content is
+  // fixed, so this settles to a constant after the first measured frame.
+  const indicatorRef = useRef(null)
+  const [indicatorSize, setIndicatorSize] = useState({ width: 0, height: 0 })
+
   const svgRef = useRef(null)
 
-  // Steps the zoom by a multiplicative factor, clamped, keeping the center of
-  // the visible workspace fixed. A workspace point w maps to an SVG-viewport
-  // point s by s = pan + zoom*w, so w = (s - pan)/zoom. Holding the point under
-  // the viewport center c fixed across the change means
-  //   (c - pan0)/z0 = (c - pan1)/z1  ->  pan1 = c - z1*(c - pan0)/z0.
-  // Refs are updated synchronously so a handler firing before the next render
-  // still converts with the new zoom/pan.
-  const stepZoom = useCallback((factor) => {
-    const z0 = zoomRef.current
-    const next = clamp(z0 * factor, ZOOM_MIN, ZOOM_MAX)
-    if (next === z0) return
-    const p0 = panRef.current
-    const v = viewRef.current
-    const cx = v.width / 2
-    const cy = v.height / 2
-    const nx = cx - (next * (cx - p0.x)) / z0
-    const ny = cy - (next * (cy - p0.y)) / z0
-    zoomRef.current = next
-    panRef.current = { x: nx, y: ny }
-    setZoom(next)
-    setPan({ x: nx, y: ny })
+  // Writes a new pan to both the ref (read synchronously by pointer/wheel
+  // handlers) and the state (drives the render), keeping them in lockstep the
+  // same way stepZoom does. Pan is left unbounded so the user can move freely.
+  const setPanBoth = useCallback((next) => {
+    panRef.current = next
+    setPan(next)
   }, [])
 
+  // Zoom about an arbitrary SVG-viewport point (cx, cy), keeping the workspace
+  // point under it fixed. All the math is in the pure zoomAboutPoint helper; a
+  // workspace point w maps to viewport s by s = pan + zoom*w. Refs are updated
+  // synchronously so a handler firing before the next render converts with the
+  // new zoom/pan. Used by the buttons/keys (about center) and ctrl+wheel (about
+  // the cursor).
+  const zoomAbout = useCallback((factor, cx, cy) => {
+    const z0 = zoomRef.current
+    const result = zoomAboutPoint(z0, panRef.current, factor, cx, cy, ZOOM_MIN, ZOOM_MAX)
+    if (result.zoom === z0) return
+    zoomRef.current = result.zoom
+    panRef.current = result.pan
+    setZoom(result.zoom)
+    setPan(result.pan)
+  }, [])
+
+  // Steps the zoom by a factor about the center of the visible workspace.
+  const stepZoom = useCallback((factor) => {
+    const v = viewRef.current
+    zoomAbout(factor, v.width / 2, v.height / 2)
+  }, [zoomAbout])
+
+  // The 100% control resets zoom to 1 AND pan back to the origin.
   const resetZoom = useCallback(() => {
     zoomRef.current = 1
     panRef.current = { x: 0, y: 0 }
@@ -230,6 +254,79 @@ function App() {
     return { x: (local.x - p.x) / z, y: (local.y - p.y) / z }
   }, [])
 
+  // Wheel/trackpad over the workspace pans the view; Ctrl/Cmd+wheel zooms
+  // toward the cursor instead. Registered as a native non-passive listener so
+  // preventDefault actually stops the page from scrolling (React's onWheel is
+  // passive). Since the viewBox tracks the panel pixel size at a 1:1, zero
+  // offset mapping, a screen delta equals an SVG-viewport delta, so the raw
+  // delta is added straight to pan and the cursor sits at (clientX-rect.left,
+  // clientY-rect.top) in the same space as pan.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return undefined
+    function handleWheel(event) {
+      event.preventDefault()
+      if (event.ctrlKey || event.metaKey) {
+        const rect = svg.getBoundingClientRect()
+        const factor = Math.exp(-event.deltaY * 0.0015)
+        zoomAbout(factor, event.clientX - rect.left, event.clientY - rect.top)
+        return
+      }
+      // Shift maps vertical wheel motion to horizontal panning, the usual
+      // convention for a wheel with no horizontal axis.
+      const dx = event.shiftKey ? event.deltaY || event.deltaX : event.deltaX
+      const dy = event.shiftKey ? 0 : event.deltaY
+      const p = panRef.current
+      setPanBoth({ x: p.x - dx, y: p.y - dy })
+    }
+    svg.addEventListener('wheel', handleWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', handleWheel)
+  }, [zoomAbout, setPanBoth])
+
+  // Space toggles panning mode. Held down it turns the cursor into a grab hand
+  // and reroutes a left-drag to panning. preventDefault stops the page from
+  // scrolling on Space; the typing guard keeps it inert while a button/input is
+  // focused so it can still activate that control.
+  useEffect(() => {
+    function isTyping(event) {
+      const tag = event.target && event.target.tagName
+      return tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA'
+    }
+    function handleDown(event) {
+      if (event.code === 'Space' && !isTyping(event)) {
+        event.preventDefault()
+        if (!spaceHeldRef.current) {
+          spaceHeldRef.current = true
+          setSpaceHeld(true)
+        }
+      }
+    }
+    function handleUp(event) {
+      if (event.code === 'Space') {
+        spaceHeldRef.current = false
+        setSpaceHeld(false)
+      }
+    }
+    window.addEventListener('keydown', handleDown)
+    window.addEventListener('keyup', handleUp)
+    return () => {
+      window.removeEventListener('keydown', handleDown)
+      window.removeEventListener('keyup', handleUp)
+    }
+  }, [])
+
+  // Begins a pan drag from a pointerdown, recording the start client position
+  // and the pan at that moment; the drag effect below translates pan by the
+  // raw client delta (screen px == viewport px) as the pointer moves.
+  function startPan(event) {
+    setDrag({
+      kind: 'pan',
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startPan: { ...panRef.current },
+    })
+  }
+
   // True only when the pointer is inside the drawn workspace area. The
   // viewBox is measured from the element, so the element rect and the viewBox
   // cover the same rectangle, but both are still checked in case a resize is
@@ -259,6 +356,14 @@ function App() {
     function handleMove(event) {
       if (drag.kind === 'palette') {
         setGhost({ x: event.clientX, y: event.clientY })
+        return
+      }
+      if (drag.kind === 'pan') {
+        // Screen px == viewport px, so the client delta is the pan delta.
+        setPanBoth({
+          x: drag.startPan.x + (event.clientX - drag.startClientX),
+          y: drag.startPan.y + (event.clientY - drag.startClientY),
+        })
         return
       }
       // Move every node in the drag by the same delta from where the drag
@@ -302,7 +407,7 @@ function App() {
       window.removeEventListener('pointerup', handleUp)
       window.removeEventListener('pointercancel', handleUp)
     }
-  }, [drag, toWorkspace, view])
+  }, [drag, toWorkspace, view, setPanBoth])
 
   // Marquee sweep. Driven off window listeners like the node drag so the
   // pointer can leave the SVG mid-sweep. `marquee` (the start) is stable for
@@ -519,6 +624,14 @@ function App() {
   // dragging. OUTPUT is the one fixed piece, never selectable, and dragging it
   // clears the selection.
   function handleNodeBodyPointerDown(node, event) {
+    // Middle-button, or Space held with the left button, pans the view instead
+    // of moving the node, so panning works even when the press lands on a gate.
+    if (event.button === 1 || (event.button === 0 && spaceHeldRef.current)) {
+      event.stopPropagation()
+      event.preventDefault()
+      startPan(event)
+      return
+    }
     if (event.button !== 0) return
     event.stopPropagation()
 
@@ -618,6 +731,13 @@ function App() {
   // sweep's up handler decides between a box-select and a plain click (which
   // clears the selection); either way connecting mode is cancelled here.
   function handleBackgroundPointerDown(event) {
+    // Middle-button, or Space held with the left button, pans instead of
+    // starting a marquee.
+    if (event.button === 1 || (event.button === 0 && spaceHeldRef.current)) {
+      event.preventDefault()
+      startPan(event)
+      return
+    }
     if (event.button !== 0) return
     cancelConnect()
     const point = toWorkspace(event.clientX, event.clientY)
@@ -674,6 +794,60 @@ function App() {
   const hasNodeSelection = selectedNodeIds.size > 0
   const canPaste = !!clipboard && clipboard.nodes.length > 0
 
+  // The OUTPUT node can be panned or zoomed out of view. When it is, show a
+  // small marker pinned to the panel edge on the line toward it; null while it
+  // is on screen. Cheap to recompute each render.
+  const outputNode = nodes.find((node) => node.type === 'OUTPUT') || null
+  // Anchor the marker exactly on the panel border (margin 0); the chip's own
+  // half-size is taken out below so its whole box, not just its center, stays
+  // inside.
+  const outIndicator = getOffscreenIndicator(outputNode, pan, zoom, view, 0)
+
+  // Clamp the chip's center so its bounding box sits fully inside the panel on
+  // every edge and corner, then keep it as close to the border as possible.
+  // Before the first measurement indicatorSize is 0, so it briefly falls back
+  // to the raw anchor; it corrects on the next frame once measured.
+  let indicatorPos = null
+  if (outIndicator) {
+    const halfW = indicatorSize.width / 2
+    const halfH = indicatorSize.height / 2
+    indicatorPos = {
+      x: clamp(outIndicator.x, halfW, Math.max(view.width - halfW, halfW)),
+      y: clamp(outIndicator.y, halfH, Math.max(view.height - halfH, halfH)),
+      angle: outIndicator.angle,
+    }
+  }
+
+  // Measure the chip after it renders so the clamp above knows its size. The
+  // change guard keeps this from looping once the (fixed) size is recorded.
+  useLayoutEffect(() => {
+    const el = indicatorRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    setIndicatorSize((current) =>
+      current.width === rect.width && current.height === rect.height
+        ? current
+        : { width: rect.width, height: rect.height }
+    )
+  })
+
+  // Cursor feedback for panning mode: a closed grabbing hand while dragging the
+  // view, an open grab hand whenever Space is held.
+  const isPanning = !!drag && drag.kind === 'pan'
+  const cursorClass = isPanning ? 'is-panning' : spaceHeld ? 'pan-ready' : ''
+
+  // Recenters OUTPUT under the panel by setting pan so its center lands on the
+  // viewport center at the current zoom. Wired to a click on the edge marker.
+  function recenterOutput() {
+    if (!outputNode) return
+    const size = getNodeSize(outputNode)
+    const z = zoomRef.current
+    setPanBoth({
+      x: view.width / 2 - z * (outputNode.x + size.width / 2),
+      y: view.height / 2 - z * (outputNode.y + size.height / 2),
+    })
+  }
+
   // Runs a context-menu action then closes the menu. Copy/Cut/Delete no-op
   // when nothing is selected; Paste no-ops with an empty clipboard, but the
   // menu items are disabled in those cases so this is belt and braces.
@@ -723,6 +897,7 @@ function App() {
                 view={view}
                 zoom={zoom}
                 pan={pan}
+                cursorClass={cursorClass}
                 nodes={nodes}
                 wires={wires}
                 connectFrom={connectFrom}
@@ -776,6 +951,30 @@ function App() {
                   &minus;
                 </button>
               </div>
+              {/* Off-screen OUTPUT marker: an amber chip pinned to the panel
+                  edge on the line toward OUTPUT, with an arrow rotated to point
+                  at it. Only rendered while OUTPUT is out of view. Clicking it
+                  pans OUTPUT back to the center. */}
+              {indicatorPos && (
+                <button
+                  type="button"
+                  ref={indicatorRef}
+                  className="output-indicator"
+                  title="Show OUTPUT"
+                  aria-label="Scroll OUTPUT into view"
+                  style={{ left: indicatorPos.x, top: indicatorPos.y }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={recenterOutput}
+                >
+                  <span
+                    className="output-indicator-arrow"
+                    style={{ transform: `rotate(${indicatorPos.angle}deg)` }}
+                  >
+                    &#9654;
+                  </span>
+                  OUT
+                </button>
+              )}
             </div>
           </section>
         </div>

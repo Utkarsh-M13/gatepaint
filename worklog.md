@@ -131,6 +131,13 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Fixed a collision where the vertically-centered OUTPUT node overlapped the controls in short panels: OUTPUT top reserve, workspace min-height, and higher z-index / more opaque backing on the controls.
 - Verified: 35/35 tests, clean build, screenshot confirms controls clear of OUTPUT, no overflow.
 
+### 2026-07-31: Workspace panning + off-screen OUTPUT indicator (Opus)
+
+- Panning via the same pan={x,y} the zoom uses: scroll/trackpad pans, Ctrl/Cmd+scroll zooms toward the cursor, Space+drag pans (grab cursor), middle-mouse drag pans. None clash with the left-drag marquee or node drag. Pan is unbounded, zoom stays clamped; the 100% reset clears both. toWorkspace still inverts translate+scale so all interactions stay accurate while panned.
+- Off-screen OUTPUT indicator: when OUTPUT is scrolled/zoomed out of the visible panel, an amber translucent "OUT" chip with an arrow pins to the panel edge on the center-to-OUTPUT ray; clicking it recenters OUTPUT. Pure helpers zoomAboutPoint, projectPointToRectEdge, getOffscreenIndicator extracted with 6 new tests.
+- Fixed the chip spilling past the panel border: it is now clamped by its measured half-size so its whole box stays inside on every edge and corner.
+- Verified: 41/41 tests, clean build, DOM measurements confirm the chip appears when OUTPUT is off-screen and stays fully inside the panel.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

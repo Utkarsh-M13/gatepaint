@@ -104,6 +104,71 @@ export function getOutputPinPos(node) {
   return { x: node.x + width, y: node.y + height / 2 };
 }
 
+// Zoom about an arbitrary point, keeping the workspace point under (cx, cy)
+// fixed on screen. (cx, cy) are in SVG-viewport coordinates, the same space as
+// pan (s = pan + zoom*w). Holding the point under the cursor fixed across the
+// change means (c - pan0)/z0 = (c - pan1)/z1, so pan1 = c - z1*(c - pan0)/z0.
+// Returns the unchanged zoom/pan when the clamp pins the scale, so callers can
+// cheaply detect a no-op. Pure, so it is shared by the buttons, the keyboard
+// and ctrl+wheel and unit-tested on its own.
+export function zoomAboutPoint(zoom, pan, factor, cx, cy, min, max) {
+  const next = Math.min(Math.max(zoom * factor, min), max);
+  if (next === zoom) return { zoom, pan };
+  return {
+    zoom: next,
+    pan: {
+      x: cx - (next * (cx - pan.x)) / zoom,
+      y: cy - (next * (cy - pan.y)) / zoom,
+    },
+  };
+}
+
+// Where the ray from (cx, cy) toward (tx, ty) crosses the border of `rect`,
+// inset by `margin` on every side. (cx, cy) is assumed inside the rect; the
+// first border the ray hits going outward is returned. Used to pin the
+// off-screen OUTPUT marker to the panel edge along the line to OUTPUT.
+export function projectPointToRectEdge(cx, cy, tx, ty, rect, margin = 0) {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  const left = rect.x + margin;
+  const right = rect.x + rect.width - margin;
+  const top = rect.y + margin;
+  const bottom = rect.y + rect.height - margin;
+  let t = Infinity;
+  if (dx > 0) t = Math.min(t, (right - cx) / dx);
+  else if (dx < 0) t = Math.min(t, (left - cx) / dx);
+  if (dy > 0) t = Math.min(t, (bottom - cy) / dy);
+  else if (dy < 0) t = Math.min(t, (top - cy) / dy);
+  if (!Number.isFinite(t)) return { x: cx, y: cy };
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+// Off-screen marker for a node (used for OUTPUT). Projects the node's box
+// through the current pan/zoom into SVG-viewport (== panel pixel) space. If
+// that box overlaps the panel the node is on screen, so returns null (no
+// marker). Otherwise returns the panel-edge point on the line from the panel
+// center to the node's projected center, plus the angle (degrees) of that line
+// so the marker can point toward the node.
+export function getOffscreenIndicator(node, pan, zoom, view, margin = 18) {
+  if (!node) return null;
+  const size = getNodeSize(node);
+  const box = {
+    x: pan.x + zoom * node.x,
+    y: pan.y + zoom * node.y,
+    width: size.width * zoom,
+    height: size.height * zoom,
+  };
+  const panel = { x: 0, y: 0, width: view.width, height: view.height };
+  if (rectsOverlap(box, panel)) return null;
+  const tx = box.x + box.width / 2;
+  const ty = box.y + box.height / 2;
+  const cx = view.width / 2;
+  const cy = view.height / 2;
+  const edge = projectPointToRectEdge(cx, cy, tx, ty, panel, margin);
+  const angle = (Math.atan2(ty - cy, tx - cx) * 180) / Math.PI;
+  return { x: edge.x, y: edge.y, angle };
+}
+
 // Position of input pin `port` (0 or 1) on the left edge of the shape.
 // A single-port node gets its pin centered; a two-port node spreads them.
 //
