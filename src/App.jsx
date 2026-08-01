@@ -1112,21 +1112,18 @@ function App() {
           </section>
         </div>
         <div className="right-column">
-          <section className="panel canvas-panel">
-            <h2 className="panel-title">Canvas</h2>
-            <div className="panel-body">
-              <OutputCanvas
-                nodes={nodes}
-                wires={wires}
-                gallery={
-                  <Gallery
-                    currentCircuit={{ nodes, wires }}
-                    onOpenInWorkspace={handleOpenInWorkspace}
-                  />
-                }
-              />
-            </div>
-          </section>
+          <div className="right-top-row">
+            <section className="panel canvas-panel">
+              <h2 className="panel-title">Canvas</h2>
+              <div className="panel-body">
+                <OutputCanvas nodes={nodes} wires={wires} />
+              </div>
+            </section>
+            <Gallery
+              currentCircuit={{ nodes, wires }}
+              onOpenInWorkspace={handleOpenInWorkspace}
+            />
+          </div>
           <section className="panel workspace-panel">
             <h2 className="panel-title">Workspace</h2>
             <div className="panel-body">

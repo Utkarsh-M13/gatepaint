@@ -29,8 +29,10 @@
   --line: #3b352d;
   --line-hi: #6b6055;
 
-  /* Type. --text is dim labelling, --text-h is lit phosphor. */
-  --text: #8b8177;
+  /* Type. --text is dim labelling, --text-h is lit phosphor. Text is a touch
+     lighter/warmer than a plain grey so body copy stays easy to read without
+     washing out the contrast against the lit phosphor headings. */
+  --text: #a49a8d;
   --text-h: #ece5da;
 
   /* The single accent: amber LED. Used for selection, armed pins and the
@@ -49,8 +51,9 @@
   --seg: 'DSEG7 Classic', var(--sans);
 
   /* VT323 sits smaller than a normal typeface at the same font-size, so the
-     base size is bumped up from the old 16px. */
-  font: 26px/145% var(--sans);
+     base size is bumped up from the old 16px, and again slightly here for
+     readability. */
+  font: 28px/145% var(--sans);
   color-scheme: dark;
   color: var(--text);
   background: var(--bg);

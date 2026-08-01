@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CircuitThumbnail from './CircuitThumbnail.jsx';
 import { FEATURED_CIRCUITS } from '../featured.js';
 import { loadSaved, saveCircuit, deleteSaved } from '../lib/savedStore.js';
+import { computeGridCapacity } from '../lib/galleryGrid.js';
 
-// How many thumbnails fit on one page of a tab (a 2x2 grid).
-const PAGE_SIZE = 4;
+// Target footprint of one thumbnail cell (the rendered painting, its name
+// label, the cell's own padding/border, and its share of the grid gap), used
+// only to estimate how many cells fit. The grid itself sizes each cell to its
+// natural content, so a slightly-off estimate never clips anything, it just
+// under- or over-counts by a cell.
+const CELL_PITCH_W = 92;
+const CELL_PITCH_H = 108;
 
 const TABS = [
   { id: 'new', label: 'New' },
@@ -12,54 +18,36 @@ const TABS = [
   { id: 'featured', label: 'Featured' },
 ];
 
-// One 2x2 page of thumbnails with pagination beneath it. Each thumbnail opens
-// the enlarged view. Shared by the Saved and Featured tabs.
-function ThumbGrid({ items, page, pageCount, onPage, onOpen }) {
-  const start = page * PAGE_SIZE;
-  const shown = items.slice(start, start + PAGE_SIZE);
+// One page of thumbnails, laid out in a cols x rows grid sized to fit the
+// gallery panel. Each thumbnail opens the enlarged view. Shared by the Saved
+// and Featured tabs. Cells stay their natural size (max-content tracks) so a
+// wide or tall panel adds room for more cells rather than stretching them.
+function ThumbGrid({ items, page, cols, rows, onOpen }) {
+  const pageSize = Math.max(1, cols * rows);
+  const start = page * pageSize;
+  const shown = items.slice(start, start + pageSize);
 
   return (
-    <>
-      <div className="gallery-grid">
-        {shown.map((entry) => (
-          <button
-            type="button"
-            key={entry.id}
-            className="gallery-cell"
-            onClick={() => onOpen(entry)}
-            title={entry.name}
-          >
-            <CircuitThumbnail circuit={entry.circuit} size={84} />
-            <span className="gallery-cell-name">{entry.name}</span>
-          </button>
-        ))}
-      </div>
-      {pageCount > 1 && (
-        <div className="gallery-pager">
-          <button
-            type="button"
-            className="gallery-page-btn"
-            onClick={() => onPage(page - 1)}
-            disabled={page === 0}
-            aria-label="Previous page"
-          >
-            &lsaquo;
-          </button>
-          <span className="gallery-page-label">
-            page {page + 1} of {pageCount}
-          </span>
-          <button
-            type="button"
-            className="gallery-page-btn"
-            onClick={() => onPage(page + 1)}
-            disabled={page >= pageCount - 1}
-            aria-label="Next page"
-          >
-            &rsaquo;
-          </button>
-        </div>
-      )}
-    </>
+    <div
+      className="gallery-grid"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, max-content)`,
+        gridTemplateRows: `repeat(${rows}, max-content)`,
+      }}
+    >
+      {shown.map((entry) => (
+        <button
+          type="button"
+          key={entry.id}
+          className="gallery-cell"
+          onClick={() => onOpen(entry)}
+          title={entry.name}
+        >
+          <CircuitThumbnail circuit={entry.circuit} size={84} />
+          <span className="gallery-cell-name">{entry.name}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -118,11 +106,34 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
   // whether the Delete action shows.
   const [selected, setSelected] = useState(null);
 
-  const items = tab === 'featured' ? FEATURED_CIRCUITS : tab === 'saved' ? saved : [];
-  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  // The grid shell is the element that actually holds the thumbnail grid,
+  // below the tabs and above the pager, so its measured size is already the
+  // room left over for cells once everything else in the panel has its
+  // space. A ResizeObserver keeps the column/row count in step as the panel
+  // (and therefore this shell) resizes.
+  const gridShellRef = useRef(null);
+  const [capacity, setCapacity] = useState({ cols: 2, rows: 2 });
 
-  // Keep the page in range when the tab or the item count changes (e.g. a
-  // delete emptied the last page).
+  useEffect(() => {
+    const el = gridShellRef.current;
+    if (!el) return undefined;
+    function measure() {
+      const { width, height } = el.getBoundingClientRect();
+      setCapacity(computeGridCapacity(width, height, CELL_PITCH_W, CELL_PITCH_H));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const items = tab === 'featured' ? FEATURED_CIRCUITS : tab === 'saved' ? saved : [];
+  const pageSize = Math.max(1, capacity.cols * capacity.rows);
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+
+  // Keep the page in range when the tab, the item count, or the computed
+  // page size changes (e.g. a delete emptied the last page, or the panel
+  // shrank and now fits fewer thumbnails per page).
   useEffect(() => {
     setPage((current) => Math.min(current, pageCount - 1));
   }, [pageCount]);
@@ -154,7 +165,7 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
     const next = saveCircuit(currentCircuit, finalName);
     setSaved(next);
     // Jump to the page holding the new entry so the player sees it land.
-    setPage(Math.ceil(next.length / PAGE_SIZE) - 1);
+    setPage(Math.ceil(next.length / pageSize) - 1);
   }
 
   function handleDelete(entry) {
@@ -201,34 +212,72 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
         </div>
 
         <div className="gallery-content">
-          {tab === 'new' && (
-            <p className="gallery-empty">
-              Coming soon. Shared circuits need a backend that does not exist yet.
-            </p>
-          )}
-          {tab === 'saved' && saved.length === 0 && (
-            <p className="gallery-empty">
-              No saved circuits yet. Build one, then Save current.
-            </p>
-          )}
-          {tab === 'saved' && saved.length > 0 && (
-            <ThumbGrid
-              items={saved}
-              page={page}
-              pageCount={pageCount}
-              onPage={setPage}
-              onOpen={(entry) => setSelected({ entry, source: 'saved' })}
-            />
-          )}
-          {tab === 'featured' && (
-            <ThumbGrid
-              items={FEATURED_CIRCUITS}
-              page={page}
-              pageCount={pageCount}
-              onPage={setPage}
-              onOpen={(entry) => setSelected({ entry, source: 'featured' })}
-            />
-          )}
+          {/* Always mounted, tab or no tab, so it is a stable ResizeObserver
+              target: its measured box is the actual room left for the grid
+              once the tabs above and the pager below have taken theirs. */}
+          <div className="gallery-grid-shell" ref={gridShellRef}>
+            {tab === 'new' && (
+              <p className="gallery-empty">
+                Coming soon. Shared circuits need a backend that does not exist yet.
+              </p>
+            )}
+            {tab === 'saved' && saved.length === 0 && (
+              <p className="gallery-empty">
+                No saved circuits yet. Build one, then Save current.
+              </p>
+            )}
+            {tab === 'saved' && saved.length > 0 && (
+              <ThumbGrid
+                items={saved}
+                page={page}
+                cols={capacity.cols}
+                rows={capacity.rows}
+                onOpen={(entry) => setSelected({ entry, source: 'saved' })}
+              />
+            )}
+            {tab === 'featured' && (
+              <ThumbGrid
+                items={FEATURED_CIRCUITS}
+                page={page}
+                cols={capacity.cols}
+                rows={capacity.rows}
+                onOpen={(entry) => setSelected({ entry, source: 'featured' })}
+              />
+            )}
+          </div>
+
+          {/* Space for the pager is reserved unconditionally so the grid
+              shell above never resizes just because a page boundary was
+              crossed; only its visibility toggles. */}
+          <div
+            className="gallery-pager"
+            style={{ visibility: pageCount > 1 ? 'visible' : 'hidden' }}
+            aria-hidden={pageCount <= 1}
+          >
+            <button
+              type="button"
+              className="gallery-page-btn"
+              onClick={() => setPage((current) => current - 1)}
+              disabled={page === 0}
+              aria-label="Previous page"
+              tabIndex={pageCount > 1 ? 0 : -1}
+            >
+              &lsaquo;
+            </button>
+            <span className="gallery-page-label">
+              page {page + 1} of {pageCount}
+            </span>
+            <button
+              type="button"
+              className="gallery-page-btn"
+              onClick={() => setPage((current) => current + 1)}
+              disabled={page >= pageCount - 1}
+              aria-label="Next page"
+              tabIndex={pageCount > 1 ? 0 : -1}
+            >
+              &rsaquo;
+            </button>
+          </div>
         </div>
       </div>
 

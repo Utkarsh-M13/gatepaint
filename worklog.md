@@ -154,6 +154,14 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Verified: 72/72 tests (54 + 18), clean build, screenshot confirms the gallery, thumbnails, pagination, and the enlarge modal with Open in Workspace, no overflow at 1440x900.
 - Follow-up: moved the gallery to its own full-height column to the right of the readout-and-instructions stack (was nested in a row under the readout). Sidebar is now [readout over instructions | gallery]. Verified: no overflow at 1440x900, gallery within bounds.
 
+### 2026-07-31: Gallery as its own panel, variable grid, readability (Sonnet + Fable)
+
+- Variable gallery grid: columns and rows now computed from the panel size via a ResizeObserver (computeGridCapacity helper, unit tested), page size = cols x rows, pagination re-clamps on resize.
+- Gallery pulled out of the canvas panel into its own top-level panel, sitting in a top row to the right of the canvas with the workspace spanning below. Readout and instructions stay in the canvas panel sidebar.
+- Font readability: --text lightened to #a49a8d, base size bumped to 28px.
+- Canvas panel bounded to its content width (sidebar column fixed at 384px) so it no longer stretches; the gallery panel stretches to fill the remaining width instead. Thumbnail cell pitch reduced (92x108) so the 6 Featured circuits fit on one page (2 cols x 3 rows).
+- Verified: 77/77 tests, clean build, DOM measurements confirm canvas 838px (bounded), gallery fills remaining, Featured on page 1 of 1, no overflow at 1440x900.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

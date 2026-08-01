@@ -373,12 +373,24 @@
   padding: 5px 16px;
 }
 
-/* ---------- right column: canvas and workspace ---------- */
+/* ---------- right column: top row (canvas + gallery) and workspace ---------- */
 
-/* The canvas sits on top at its natural height; the workspace takes
-   whatever is left below it. */
-.canvas-panel {
+/* Top row of the right column: the canvas panel and the gallery panel sit
+   side by side, sized to their natural content height; the workspace panel
+   below takes whatever is left. */
+.right-top-row {
   flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The canvas panel sizes to its content (grid plus readout and instructions)
+   and does not stretch. The gallery takes the remaining width instead. */
+.canvas-panel {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .workspace-panel {
@@ -387,13 +399,16 @@
 }
 
 /* Canvas panel: the gridded canvas on the left, the readout plus the
-   how-to-play copy and the gallery in a widened sidebar on the right. */
+   how-to-play copy in a naturally-sized sidebar on the right. */
 .canvas-block {
   display: grid;
-  grid-template-columns: minmax(0, 430px) minmax(0, 1fr);
+  /* Both columns are bounded so the canvas panel has a fixed natural width:
+     the gallery, not the canvas, is what stretches. The sidebar width also
+     wraps the instructions text at a comfortable measure. */
+  grid-template-columns: minmax(0, 400px) 384px;
   /* The grid and the sidebar are two separate things, so give them room to
      read that way rather than crowding the edge of the pixels. */
-  column-gap: 40px;
+  column-gap: 28px;
   row-gap: 16px;
   align-items: start;
 }
@@ -480,39 +495,19 @@
   background: var(--bg);
 }
 
-/* Sidebar to the right of the grid: readout on top, then a row holding the
-   how-to copy and the gallery side by side so the sidebar grows wide, not
-   tall, and never pushes the workspace below its floor. */
-/* The sidebar is two columns: the readout stacked over the instructions on
-   the left, and the gallery as its own full-height column to the right of
-   both. */
+/* Sidebar to the right of the grid: the readout on top, the how-to-play
+   copy below. The gallery lives in its own panel now, so this column just
+   sizes itself naturally to its content, no fixed or stretched width. */
 .canvas-side {
   display: flex;
-  flex-direction: row;
-  align-items: stretch;
+  flex-direction: column;
   gap: 16px;
   min-width: 0;
   padding-right: 4px;
 }
 
-/* Left column of the sidebar: the readout on top, instructions below. */
-.canvas-side-main {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.canvas-side .howto-panel {
   min-width: 0;
-  flex: 1 1 240px;
-}
-
-.canvas-side-main .howto-panel {
-  min-width: 200px;
-}
-
-/* Gallery column, sitting to the right of the readout and instructions and
-   spanning the full height of that stack. */
-.canvas-side .gallery-panel {
-  flex: 0 0 auto;
-  align-self: stretch;
 }
 
 /* Segment-display bit readout. A physical hardware readout bolted onto the
@@ -640,12 +635,14 @@
 
 /* ---------- gallery ---------- */
 
-/* The gallery is its own instrument on the sidebar, same plate and ruled
-   title strip as the other panels. Fixed comfortable width so the 2x2 grid
-   of thumbnails is not stretched by the flex row it sits in. */
+/* The gallery is its own panel, a sibling of the canvas panel in the top
+   row. Fixed comfortable width, enough for at least two columns of
+   thumbnails, so it is not stretched or squeezed by the row it sits in. */
+/* The gallery stretches to fill the width the canvas does not use, so its
+   variable grid gets enough columns to show the featured set on one page. */
 .gallery-panel {
-  flex: none;
-  width: 236px;
+  flex: 1 1 auto;
+  min-width: 240px;
 }
 
 /* The title strip carries the Save button on the Saved tab, so it becomes a
@@ -717,10 +714,25 @@
 }
 
 .gallery-content {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 210px;
+}
+
+/* The shell that actually holds the thumbnail grid (or the empty-state
+   copy). It takes whatever height is left after the tabs above and the
+   pager below, and that measured box is exactly what the adaptive grid
+   sizes itself against. Hidden overflow is a pure safety net: with the
+   capacity math rounding down, cells should always fit inside it. */
+.gallery-grid-shell {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
 }
 
 /* Coming-soon / empty-state line. Dim and unhurried, no controls. */
@@ -732,12 +744,16 @@
   padding: 8px 2px;
 }
 
-/* Up to four thumbnails in a 2x2 grid. */
+/* The adaptive thumbnail grid. Column/row counts and track sizes come in as
+   inline styles from Gallery (computed from the panel's measured size), all
+   this rule does is set the gap and keep cells packed to the top-left corner
+   rather than centered or stretched across any leftover space. */
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
-  justify-items: center;
+  justify-content: start;
+  align-content: start;
+  justify-items: start;
 }
 
 /* Each cell is a button: the rendered painting over its name. */
@@ -787,13 +803,17 @@
 }
 
 /* Pagination: small outlined arrows flanking a page label, matching the zoom
-   controls. */
+   controls. Fixed height and flex: none so it always reserves the same strip
+   below the grid shell, whether or not it is currently visible (see the
+   visibility toggle in Gallery), which keeps the grid shell's measured size
+   from jittering as pages come and go. */
 .gallery-pager {
+  flex: none;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-top: auto;
 }
 
 .gallery-page-btn {
