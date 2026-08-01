@@ -1,6 +1,5 @@
 import GateNode from './GateNode.jsx';
 import Wire from './Wire.jsx';
-import { getOutputPinPos } from '../lib/geometry.js';
 
 // SVG surface that draws the circuit straight from state. Interaction is
 // owned by App: this component just forwards pointer events up and draws the
@@ -20,7 +19,7 @@ function Workspace({
   nodes,
   wires,
   connectFrom,
-  previewPoint,
+  previewLine,
   selectedNodeIds,
   selectedWireId,
   marqueeRect,
@@ -31,11 +30,10 @@ function Workspace({
   onWorkspaceContextMenu,
   onOutputPinClick,
   onInputPinClick,
+  onPinPointerDown,
   onWireClick,
 }) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const sourceNode = connectFrom ? nodesById.get(connectFrom) : null;
-  const previewStart = sourceNode ? getOutputPinPos(sourceNode) : null;
 
   return (
     <svg
@@ -72,12 +70,12 @@ function Workspace({
           onSelect={onWireClick}
         />
       ))}
-      {previewStart && previewPoint && (
+      {previewLine && (
         <line
-          x1={previewStart.x}
-          y1={previewStart.y}
-          x2={previewPoint.x}
-          y2={previewPoint.y}
+          x1={previewLine.x1}
+          y1={previewLine.y1}
+          x2={previewLine.x2}
+          y2={previewLine.y2}
           className="wire-preview"
         />
       )}
@@ -91,6 +89,7 @@ function Workspace({
           onContextMenu={onNodeContextMenu}
           onOutputPinClick={onOutputPinClick}
           onInputPinClick={onInputPinClick}
+          onPinPointerDown={onPinPointerDown}
         />
       ))}
       {/* Rubber-band rectangle, drawn on top so it reads over the nodes. */}

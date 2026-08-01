@@ -5,6 +5,12 @@ import {
   getNodeSize,
   getNodeBox,
   getNodesBounds,
+  getPortCount,
+  getInputPinPos,
+  getOutputPinPos,
+  findPinAtPoint,
+  findGateAtPoint,
+  isGateType,
   rectsOverlap,
   zoomAboutPoint,
   getOffscreenIndicator,
@@ -12,6 +18,7 @@ import {
   VIEW_WIDTH,
   VIEW_HEIGHT,
 } from './lib/geometry.js'
+import { transferWiresForSwap } from './lib/swap.js'
 import { buildClipboard, remapClipboard } from './lib/clipboard.js'
 import Palette from './components/Palette.jsx'
 import Workspace from './components/Workspace.jsx'
@@ -31,6 +38,11 @@ function clamp(value, min, max) {
 // A pointer moved less than this many screen pixels counts as a click, not a
 // drag. Used to tell a marquee sweep apart from a plain click-to-deselect.
 const CLICK_SLOP = 4
+
+// How close (in workspace units) the pointer must be released to a pin for a
+// drag-to-connect to land on it. A little larger than the drawn pin radius so
+// the release is forgiving without grabbing a neighbor.
+const PIN_HIT_RADIUS = 14
 
 // Zoom limits and the per-step multiplier shared by the keys and the buttons.
 // Zoom scales the workspace group only; the SVG viewBox stays pinned to the
@@ -103,6 +115,23 @@ function App() {
   // Cursor position in workspace coordinates, for the preview line.
   const [previewPoint, setPreviewPoint] = useState(null)
 
+  // Drag-to-connect. On pointerdown on a pin we record a potential wire drag;
+  // it only becomes a real drag once the pointer moves past CLICK_SLOP, so a
+  // press-and-release in place still falls through to the click-click flow.
+  // Holds { kind: 'output'|'input', nodeId, port, startX, startY (the pin, in
+  // workspace units), startClientX, startClientY }, or null.
+  const [wireDrag, setWireDrag] = useState(null)
+  // True once the current pin drag has passed the click threshold, which is
+  // what turns the press into a one-gesture drag-connect and shows the preview.
+  const [wireDragMoved, setWireDragMoved] = useState(false)
+  // Mirrors wireDragMoved for the window handlers, which run outside React's
+  // closure and need the live value to tell the first threshold crossing apart.
+  const wireMovedRef = useRef(false)
+  // Set on a completed drag so the trailing click on the source pin is ignored
+  // (a moved drag must not also fire the click-click arm/complete). Cleared at
+  // the start of the next pin press so it never leaks across gestures.
+  const suppressPinClickRef = useRef(false)
+
   // Selection is now a set of node ids plus, separately, at most one wire.
   // Nodes and wires are still mutually exclusive: selecting either clears the
   // other. OUTPUT is never put in the node set. Using a Set keeps membership
@@ -150,6 +179,15 @@ function App() {
   useEffect(() => {
     viewRef.current = view
   }, [view])
+
+  // Latest nodes, for pointer handlers (pin-drop hit-testing, palette-drop swap
+  // detection) that run from window listeners and would otherwise close over a
+  // stale array. Reading a ref avoids adding `nodes` to those effects' deps,
+  // which would re-subscribe the listeners on every node move.
+  const nodesRef = useRef(nodes)
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
 
   // While Space is held the workspace enters panning mode: the cursor shows a
   // grab hand and a left-drag moves the view instead of starting a marquee.
@@ -385,15 +423,41 @@ function App() {
     function handleUp(event) {
       if (drag.kind === 'palette' && isOverWorkspace(event.clientX, event.clientY)) {
         const point = toWorkspace(event.clientX, event.clientY)
-        const size = getNodeSize({ type: drag.item.type })
-        const dropped = {
-          id: nextId('n'),
-          type: drag.item.type,
-          label: drag.item.label,
-          x: point.x - size.width / 2,
-          y: point.y - size.height / 2,
+        // Dropping a gate on top of an existing gate swaps it in place, keeping
+        // and remapping the old gate's wiring. Only gate-on-gate swaps; an
+        // INPUT drop, or a drop over an INPUT/OUTPUT node, is a normal drop.
+        const target = isGateType(drag.item.type)
+          ? findGateAtPoint(nodesRef.current, point)
+          : null
+        if (target) {
+          const newId = nextId('n')
+          const swapped = {
+            id: newId,
+            type: drag.item.type,
+            label: drag.item.label,
+            x: target.x,
+            y: target.y,
+          }
+          const newPortCount = getPortCount({ type: drag.item.type })
+          setNodes((current) =>
+            current.map((node) =>
+              node.id === target.id ? { ...swapped, ...clampNode(swapped, view) } : node
+            )
+          )
+          setWires((current) => transferWiresForSwap(target.id, newId, newPortCount, current))
+          setSelectedNodeIds(new Set([newId]))
+          setSelectedWireId(null)
+        } else {
+          const size = getNodeSize({ type: drag.item.type })
+          const dropped = {
+            id: nextId('n'),
+            type: drag.item.type,
+            label: drag.item.label,
+            x: point.x - size.width / 2,
+            y: point.y - size.height / 2,
+          }
+          setNodes((current) => [...current, { ...dropped, ...clampNode(dropped, view) }])
         }
-        setNodes((current) => [...current, { ...dropped, ...clampNode(dropped, view) }])
       }
       setDrag(null)
       setGhost(null)
@@ -454,6 +518,59 @@ function App() {
       window.removeEventListener('pointercancel', handleUp)
     }
   }, [marquee, nodes, toWorkspace])
+
+  // Drag-to-connect. Driven off window listeners so the pointer can leave the
+  // source pin and travel anywhere before release. `wireDrag` is stable for the
+  // whole gesture, so this effect subscribes once per drag. The pin positions
+  // come from the geometry helpers and the release target is hit-tested by
+  // distance, so everything stays correct under zoom and pan.
+  useEffect(() => {
+    if (!wireDrag) return undefined
+
+    function handleMove(event) {
+      const moved =
+        Math.abs(event.clientX - wireDrag.startClientX) > CLICK_SLOP ||
+        Math.abs(event.clientY - wireDrag.startClientY) > CLICK_SLOP
+      if (!moved) return
+      // First crossing of the threshold: this is now a real drag, so drop any
+      // armed click-click source and start showing the preview line.
+      if (!wireMovedRef.current) {
+        wireMovedRef.current = true
+        setWireDragMoved(true)
+        cancelConnect()
+      }
+      setPreviewPoint(toWorkspace(event.clientX, event.clientY))
+    }
+
+    function handleUp(event) {
+      const moved =
+        wireMovedRef.current ||
+        Math.abs(event.clientX - wireDrag.startClientX) > CLICK_SLOP ||
+        Math.abs(event.clientY - wireDrag.startClientY) > CLICK_SLOP
+      if (moved) {
+        // Suppress the click that trails this pointerup so it does not also run
+        // the click-click flow. Then hit-test the release point for a pin.
+        suppressPinClickRef.current = true
+        const point = toWorkspace(event.clientX, event.clientY)
+        const target = findPinAtPoint(nodesRef.current, point, PIN_HIT_RADIUS)
+        createWireFromDrag(wireDrag, target)
+        cancelConnect()
+        setPreviewPoint(null)
+      }
+      setWireDrag(null)
+      setWireDragMoved(false)
+      wireMovedRef.current = false
+    }
+
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+    }
+  }, [wireDrag, toWorkspace])
 
   // Closes the context menu on any pointerdown outside it. Kept separate from
   // the menu's own item handlers, which close it directly on activation.
@@ -755,9 +872,63 @@ function App() {
     setPreviewPoint(toWorkspace(event.clientX, event.clientY))
   }
 
+  // Pointerdown on a pin begins a POTENTIAL drag-to-connect. The pin already
+  // stopped propagation, so no node drag starts. Nothing is committed here: if
+  // the pointer never moves past CLICK_SLOP this stays a plain click and the
+  // pin's onClick runs the existing click-click flow. Only a real drag (handled
+  // in the wireDrag effect) creates a wire in one gesture. Left button only.
+  function handlePinPointerDown(node, kind, port, event) {
+    suppressPinClickRef.current = false
+    if (event.button !== 0) return
+    const pin = kind === 'output' ? getOutputPinPos(node) : getInputPinPos(node, port)
+    wireMovedRef.current = false
+    setWireDragMoved(false)
+    setWireDrag({
+      kind,
+      nodeId: node.id,
+      port: kind === 'input' ? port : null,
+      startX: pin.x,
+      startY: pin.y,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+    })
+  }
+
+  // Commits a wire from a completed drag, given the source pin and the pin the
+  // pointer was released over (or null). Output source -> input target, or
+  // input source -> output target; any other combination, a self-wire, or an
+  // empty release is ignored. Replace-on-reconnect: the one wire allowed into a
+  // target input port is cleared first; output pins fan out freely.
+  function createWireFromDrag(source, target) {
+    if (!target) return
+    let from
+    let to
+    let toPort
+    if (source.kind === 'output') {
+      if (target.kind !== 'input' || target.nodeId === source.nodeId) return
+      from = source.nodeId
+      to = target.nodeId
+      toPort = target.port
+    } else {
+      if (target.kind !== 'output' || target.nodeId === source.nodeId) return
+      from = target.nodeId
+      to = source.nodeId
+      toPort = source.port
+    }
+    setWires((current) => [
+      ...current.filter((wire) => !(wire.to === to && wire.toPort === toPort)),
+      { id: nextId('w'), from, to, toPort },
+    ])
+  }
+
   // Clicking an output pin arms it as the source. Clicking a different output
-  // pin while armed just moves the source.
+  // pin while armed just moves the source. Skipped when a drag just completed
+  // on this pin, so a one-gesture drag never also arms click-click mode.
   function handleOutputPinClick(node) {
+    if (suppressPinClickRef.current) {
+      suppressPinClickRef.current = false
+      return
+    }
     setConnectFrom(node.id)
     setPreviewPoint(null)
     clearSelection()
@@ -767,6 +938,10 @@ function App() {
   // wire, so any existing wire into this port is replaced. Clicking an
   // occupied input pin while NOT connecting instead detaches its wire.
   function handleInputPinClick(node, port) {
+    if (suppressPinClickRef.current) {
+      suppressPinClickRef.current = false
+      return
+    }
     if (!connectFrom) {
       setWires((current) => current.filter((wire) => !(wire.to === node.id && wire.toPort === port)))
       return
@@ -790,6 +965,26 @@ function App() {
     marquee && marqueeCur && marqueeCur.moved
       ? rectFromPoints(marquee.startX, marquee.startY, marqueeCur.x, marqueeCur.y)
       : null
+
+  // The dashed preview line to draw while wiring. A live drag-connect wins:
+  // its start is the source pin recorded at pointerdown (output or input), its
+  // end is the cursor. Otherwise, if an output pin is armed for click-click,
+  // the line runs from that pin to the cursor. Null when neither is active.
+  let previewLine = null
+  if (wireDrag && wireDragMoved && previewPoint) {
+    previewLine = {
+      x1: wireDrag.startX,
+      y1: wireDrag.startY,
+      x2: previewPoint.x,
+      y2: previewPoint.y,
+    }
+  } else if (connectFrom && previewPoint) {
+    const src = nodes.find((node) => node.id === connectFrom)
+    if (src) {
+      const start = getOutputPinPos(src)
+      previewLine = { x1: start.x, y1: start.y, x2: previewPoint.x, y2: previewPoint.y }
+    }
+  }
 
   const hasNodeSelection = selectedNodeIds.size > 0
   const canPaste = !!clipboard && clipboard.nodes.length > 0
@@ -901,7 +1096,7 @@ function App() {
                 nodes={nodes}
                 wires={wires}
                 connectFrom={connectFrom}
-                previewPoint={previewPoint}
+                previewLine={previewLine}
                 selectedNodeIds={selectedNodeIds}
                 selectedWireId={selectedWireId}
                 marqueeRect={marqueeRect}
@@ -912,6 +1107,7 @@ function App() {
                 onWorkspaceContextMenu={handleWorkspaceContextMenu}
                 onOutputPinClick={handleOutputPinClick}
                 onInputPinClick={handleInputPinClick}
+                onPinPointerDown={handlePinPointerDown}
                 onWireClick={handleWireClick}
               />
               {/* Floating zoom controls, top-right, over the SVG. The wrapper

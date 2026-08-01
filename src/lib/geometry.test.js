@@ -3,6 +3,10 @@ import {
   zoomAboutPoint,
   projectPointToRectEdge,
   getOffscreenIndicator,
+  findPinAtPoint,
+  findGateAtPoint,
+  getOutputPinPos,
+  getInputPinPos,
 } from './geometry.js';
 
 describe('zoomAboutPoint', () => {
@@ -59,5 +63,58 @@ describe('getOffscreenIndicator', () => {
     // Pinned to the inset right border, angle points rightward (near 0 deg).
     expect(ind.x).toBeGreaterThan(view.width - 40);
     expect(Math.abs(ind.angle)).toBeLessThan(45);
+  });
+});
+
+describe('findPinAtPoint', () => {
+  const and = { id: 'g1', type: 'AND', x: 100, y: 100 };
+  const out = { id: 'out', type: 'OUTPUT', x: 300, y: 100 };
+  const nodes = [and, out];
+
+  it('resolves a point near an output pin to that pin', () => {
+    const p = getOutputPinPos(and);
+    const hit = findPinAtPoint(nodes, { x: p.x + 2, y: p.y - 2 });
+    expect(hit).toEqual({ nodeId: 'g1', kind: 'output', port: null });
+  });
+
+  it('resolves a point near an input pin to that port', () => {
+    const p = getInputPinPos(and, 1);
+    const hit = findPinAtPoint(nodes, { x: p.x + 1, y: p.y + 1 });
+    expect(hit).toEqual({ nodeId: 'g1', kind: 'input', port: 1 });
+  });
+
+  it('returns null when no pin is within the radius', () => {
+    expect(findPinAtPoint(nodes, { x: 5, y: 5 })).toBeNull();
+  });
+
+  it('never reports an output pin for the OUTPUT node', () => {
+    // Right at OUTPUT's would-be output pin position, only its input matches.
+    const p = getOutputPinPos(out);
+    const hit = findPinAtPoint(nodes, { x: p.x, y: p.y });
+    expect(hit === null || hit.kind === 'input').toBe(true);
+  });
+});
+
+describe('findGateAtPoint', () => {
+  const and = { id: 'g1', type: 'AND', x: 100, y: 100 };
+  const not = { id: 'g2', type: 'NOT', x: 100, y: 100 };
+  const input = { id: 'in', type: 'INPUT', x: 100, y: 100 };
+
+  it('returns the gate whose box contains the point', () => {
+    const hit = findGateAtPoint([and], { x: 120, y: 120 });
+    expect(hit.id).toBe('g1');
+  });
+
+  it('returns the topmost (last drawn) gate when they overlap', () => {
+    const hit = findGateAtPoint([and, not], { x: 120, y: 120 });
+    expect(hit.id).toBe('g2');
+  });
+
+  it('ignores INPUT and OUTPUT nodes', () => {
+    expect(findGateAtPoint([input], { x: 120, y: 120 })).toBeNull();
+  });
+
+  it('returns null when the point is outside every gate box', () => {
+    expect(findGateAtPoint([and], { x: 10, y: 10 })).toBeNull();
   });
 });

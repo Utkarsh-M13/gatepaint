@@ -15,7 +15,7 @@ import { gateSymbol } from '../lib/symbols.js';
 //
 // The symbol body starts a drag. The pins do not: they stop the pointerdown
 // so a click on a pin stays a click, which is what the wiring needs.
-function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onContextMenu, onOutputPinClick, onInputPinClick }) {
+function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onContextMenu, onOutputPinClick, onInputPinClick, onPinPointerDown }) {
   const handleContextMenu = (event) => onContextMenu(node, event);
   const { width, height } = getNodeSize(node);
   const portCount = getPortCount(node);
@@ -78,7 +78,12 @@ function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onCont
           cy={pos.y}
           r={9}
           className="pin pin-input"
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            // Keep the press off the body (which would start a node drag), then
+            // let App begin a potential drag-to-connect from this input pin.
+            event.stopPropagation();
+            onPinPointerDown(node, 'input', port, event);
+          }}
           onClick={(event) => {
             event.stopPropagation();
             onInputPinClick(node, port);
@@ -91,7 +96,12 @@ function GateNode({ node, isConnectSource, isSelected, onBodyPointerDown, onCont
           cy={outputPos.y}
           r={9}
           className={isConnectSource ? 'pin pin-output pin-active' : 'pin pin-output'}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            // Same as the input pins: block the body drag, then arm a potential
+            // drag-to-connect from this output pin.
+            event.stopPropagation();
+            onPinPointerDown(node, 'output', null, event);
+          }}
           onClick={(event) => {
             event.stopPropagation();
             onOutputPinClick(node);

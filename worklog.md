@@ -138,6 +138,13 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Fixed the chip spilling past the panel border: it is now clamped by its measured half-size so its whole box stays inside on every edge and corner.
 - Verified: 41/41 tests, clean build, DOM measurements confirm the chip appears when OUTPUT is off-screen and stays fully inside the panel.
 
+### 2026-07-31: Drag-to-connect wiring + swap-on-drop (Opus)
+
+- Drag-to-connect added alongside click-click: pressing a pin and dragging past the click threshold pulls a live preview wire and connects on release over a target pin (output->input or input->output, self-wire ignored, replace-on-reconnect and fan-out preserved). A press-release below threshold still runs the old click-click arm/complete, distinguished via a suppress flag so a completed drag does not also fire the click. Release target found by geometry (findPinAtPoint) so it works under zoom/pan.
+- Swap-on-drop: dropping a NEW palette gate onto an existing gate box swaps it in place. transferWiresForSwap re-points the old gate's output fan-out to the new gate and maps input wires by port index up to the new gate's port count (extra ports dropped, e.g. NOT onto a wired AND). Non-gate drops or drops over empty/INPUT/OUTPUT behave as before. Swapped-in gate becomes the selection.
+- Pure helpers findPinAtPoint/findGateAtPoint/isGateType in geometry.js and transferWiresForSwap in lib/swap.js, with 13 new unit tests.
+- Verified: 54/54 tests (41 + 13), clean build, screenshot confirms render with no overflow. Interaction coexistence verified by code review and helper tests per the no-click-spam constraint.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

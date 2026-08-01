@@ -32,6 +32,15 @@ export const XOR_TAIL_GAP = 7;
 // Where the two input pins sit down the height of a node, as fractions.
 export const PORT_FRACTIONS = [0.28, 0.72];
 
+// The five combinational gate types. INPUT and OUTPUT are fixtures, not gates,
+// so they are excluded: a palette drop only swaps one gate for another.
+export const GATE_TYPES = new Set(['AND', 'OR', 'NOT', 'XOR', 'NAND']);
+
+// True when a node type is one of the swappable gates.
+export function isGateType(type) {
+  return GATE_TYPES.has(type);
+}
+
 // True for the two shapes with the curved concave left edge.
 function hasCurvedLeftEdge(type) {
   return type === 'OR' || type === 'XOR';
@@ -187,4 +196,56 @@ export function getInputPinPos(node, port) {
     ? 2 * fraction * (1 - fraction) * OR_CONCAVE_DEPTH
     : 0;
   return { x: node.x + inset + bow, y };
+}
+
+// Finds the pin nearest to a workspace point within `radius`, or null. Used by
+// drag-to-connect to resolve which pin the pointer was released over. Checks
+// every node's output pin (all but OUTPUT) and each of its input pins, and
+// returns the closest hit as { nodeId, kind: 'output'|'input', port }. Purely
+// geometric, so it stays correct under any zoom/pan once the point has been
+// converted to workspace coordinates.
+export function findPinAtPoint(nodes, point, radius = 14) {
+  let best = null;
+  let bestDistSq = radius * radius;
+  for (const node of nodes) {
+    if (node.type !== 'OUTPUT') {
+      const p = getOutputPinPos(node);
+      const d = (p.x - point.x) ** 2 + (p.y - point.y) ** 2;
+      if (d <= bestDistSq) {
+        bestDistSq = d;
+        best = { nodeId: node.id, kind: 'output', port: null };
+      }
+    }
+    const count = getPortCount(node);
+    for (let port = 0; port < count; port++) {
+      const p = getInputPinPos(node, port);
+      const d = (p.x - point.x) ** 2 + (p.y - point.y) ** 2;
+      if (d <= bestDistSq) {
+        bestDistSq = d;
+        best = { nodeId: node.id, kind: 'input', port };
+      }
+    }
+  }
+  return best;
+}
+
+// Finds the topmost gate whose box contains a workspace point, or null. Only
+// the swappable gate types count; INPUT and OUTPUT are skipped. Nodes later in
+// the list draw on top, so the scan runs from the end to return the one the
+// user would see under the cursor. Used by the palette drop to decide a swap.
+export function findGateAtPoint(nodes, point) {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const node = nodes[i];
+    if (!isGateType(node.type)) continue;
+    const box = getNodeBox(node);
+    if (
+      point.x >= box.x &&
+      point.x <= box.x + box.width &&
+      point.y >= box.y &&
+      point.y <= box.y + box.height
+    ) {
+      return node;
+    }
+  }
+  return null;
 }
