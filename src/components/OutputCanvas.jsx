@@ -138,11 +138,11 @@ function OutputCanvas({ nodes, wires, gallery }) {
         </div>
       </div>
       <aside className="canvas-side">
-        <ReadoutStrip hovered={hovered} />
-        <div className="canvas-side-lower">
+        <div className="canvas-side-main">
+          <ReadoutStrip hovered={hovered} />
           <HowToPlay />
-          {gallery}
         </div>
+        {gallery}
       </aside>
     </div>
   );

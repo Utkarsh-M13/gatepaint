@@ -152,6 +152,7 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Featured set of 6 (Vertical Stripes, Left Half, Checkerboard, Quadrants, Outer Frame, Plaid), Frame/Plaid built programmatically. Saved store persists to localStorage key gatepaint.saved.v1 with validation; Save current button on the Saved tab prompts for a name. Existing File > Save (download) untouched.
 - New pure modules: lib/renderCircuit.js, featured.js, lib/savedStore.js, plus CircuitThumbnail and Gallery components, with 18 new unit tests (featured renders match formulas, saved-store validate/round-trip).
 - Verified: 72/72 tests (54 + 18), clean build, screenshot confirms the gallery, thumbnails, pagination, and the enlarge modal with Open in Workspace, no overflow at 1440x900.
+- Follow-up: moved the gallery to its own full-height column to the right of the readout-and-instructions stack (was nested in a row under the readout). Sidebar is now [readout over instructions | gallery]. Verified: no overflow at 1440x900, gallery within bounds.
 
 ### 2026-07-30: Post-v1 UI rework (Opus)
 

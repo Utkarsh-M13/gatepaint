@@ -483,31 +483,36 @@
 /* Sidebar to the right of the grid: readout on top, then a row holding the
    how-to copy and the gallery side by side so the sidebar grows wide, not
    tall, and never pushes the workspace below its floor. */
+/* The sidebar is two columns: the readout stacked over the instructions on
+   the left, and the gallery as its own full-height column to the right of
+   both. */
 .canvas-side {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   gap: 16px;
   min-width: 0;
   padding-right: 4px;
 }
 
-/* The lower band under the readout: instructions and gallery in a row. It
-   wraps only if the sidebar is squeezed, which it is not at 1440 wide. */
-.canvas-side-lower {
+/* Left column of the sidebar: the readout on top, instructions below. */
+.canvas-side-main {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  flex: 1 1 240px;
 }
 
-.canvas-side-lower .howto-panel {
-  flex: 1 1 220px;
+.canvas-side-main .howto-panel {
   min-width: 200px;
-  max-width: 320px;
 }
 
-.canvas-side-lower .gallery-panel {
+/* Gallery column, sitting to the right of the readout and instructions and
+   spanning the full height of that stack. */
+.canvas-side .gallery-panel {
   flex: 0 0 auto;
+  align-self: stretch;
 }
 
 /* Segment-display bit readout. A physical hardware readout bolted onto the
