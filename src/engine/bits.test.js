@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { GRID_BITS, GRID_SIZE, INPUT_LABELS, bitsOf } from './bits.js';
+import {
+  GRID_BITS,
+  GRID_SIZE,
+  INPUT_LABELS,
+  MAX_TARGET,
+  bitsOf,
+  targetToValue,
+  valueToTarget,
+  stepTarget,
+} from './bits.js';
 
 describe('bits', () => {
   it('GRID_BITS is 4 and GRID_SIZE follows from it', () => {
@@ -48,5 +57,38 @@ describe('bits', () => {
         }
       }
     }
+  });
+});
+
+describe('binary target packing and stepping', () => {
+  it('MAX_TARGET is the largest GRID_BITS value', () => {
+    expect(MAX_TARGET).toBe(GRID_SIZE - 1);
+  });
+
+  it('targetToValue and valueToTarget are inverses (index 0 = LSB)', () => {
+    expect(targetToValue([1, 1, 0, 0])).toBe(3);
+    expect(valueToTarget(3)).toEqual([1, 1, 0, 0]);
+    for (let v = 0; v <= MAX_TARGET; v += 1) {
+      expect(targetToValue(valueToTarget(v))).toBe(v);
+    }
+  });
+
+  it('targetToValue treats a missing or short array as 0-filled', () => {
+    expect(targetToValue(undefined)).toBe(0);
+    expect(targetToValue([1])).toBe(1);
+  });
+
+  it('stepTarget increments the whole number, carrying across bits', () => {
+    // 0011 -> 0100: incrementing 3 gives 4.
+    expect(stepTarget([1, 1, 0, 0], 1)).toEqual([0, 0, 1, 0]);
+    // 0100 -> 0011: decrementing 4 gives 3.
+    expect(stepTarget([0, 0, 1, 0], -1)).toEqual([1, 1, 0, 0]);
+  });
+
+  it('clamps at both ends without wrapping', () => {
+    const max = valueToTarget(MAX_TARGET);
+    expect(stepTarget(max, 1)).toEqual(max); // at the top, up is a no-op
+    const zero = valueToTarget(0);
+    expect(stepTarget(zero, -1)).toEqual(zero); // at the bottom, down is a no-op
   });
 });

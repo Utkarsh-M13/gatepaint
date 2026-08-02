@@ -1,6 +1,15 @@
 // Pure clipboard helpers for copy/cut/paste in the workspace. No React here,
 // just data transforms, so they can be unit-tested in isolation.
 
+// A shallow copy of a node that also deep-copies the one array field a node
+// can hold: a comparator's binary constant. Without this the copy would share
+// the target array with the original and a later toggle would leak across.
+function cloneNode(node) {
+  const copy = { ...node };
+  if (Array.isArray(node.target)) copy.target = [...node.target];
+  return copy;
+}
+
 // Builds a clipboard payload from a selection: deep copies of the selected
 // nodes (never OUTPUT) plus the wires whose BOTH endpoints are inside the
 // selection. A wire with only one endpoint selected is dropped, since its
@@ -16,7 +25,7 @@ export function buildClipboard(nodes, wires, selectedIds) {
     (wire) => selSet.has(wire.from) && selSet.has(wire.to)
   );
   return {
-    nodes: selNodes.map((node) => ({ ...node })),
+    nodes: selNodes.map(cloneNode),
     wires: selWires.map((wire) => ({ ...wire })),
   };
 }
@@ -30,7 +39,7 @@ export function remapClipboard(clipboard, nextId, offset) {
   const nodes = clipboard.nodes.map((node) => {
     const id = nextId('n');
     idMap.set(node.id, id);
-    return { ...node, id, x: node.x + offset.dx, y: node.y + offset.dy };
+    return { ...cloneNode(node), id, x: node.x + offset.dx, y: node.y + offset.dy };
   });
   const wires = clipboard.wires.map((wire) => ({
     ...wire,

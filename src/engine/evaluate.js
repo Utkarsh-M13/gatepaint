@@ -2,15 +2,17 @@
 //
 // evaluate(nodes, wires, bits) -> boolean
 //
-// nodes: [{ id, type: 'INPUT'|'AND'|'OR'|'NOT'|'XOR'|'NAND'|'OUTPUT', label, x, y }]
-// wires: [{ id, from: nodeId, to: nodeId, toPort: 0|1 }]
+// nodes: [{ id, type: 'INPUT'|'AND'|'OR'|'NOT'|'XOR'|'NAND'|'NOR'|'XNOR'|'CMP'|'OUTPUT', label, x, y }]
+// wires: [{ id, from: nodeId, to: nodeId, toPort: 0..GRID_BITS-1 }]
 // bits:  { x0..x3, y0..y3 } as 0/1 (see bits.js)
 //
 // INPUT nodes take their value from bits[label]. Every other node pulls its
 // value from whatever wires feed its input ports. The OUTPUT node's value is
 // the result. Anything unwired, unknown, or part of a cycle evaluates to off.
 
-const GATE_TYPES = new Set(['AND', 'OR', 'NOT', 'XOR', 'NAND']);
+import { GRID_BITS } from './bits.js';
+
+const GATE_TYPES = new Set(['AND', 'OR', 'NOT', 'XOR', 'NAND', 'NOR', 'XNOR']);
 
 function applyGate(type, a, b) {
   switch (type) {
@@ -25,9 +27,25 @@ function applyGate(type, a, b) {
       return a !== b;
     case 'NAND':
       return !(a && b);
+    case 'NOR':
+      return !(a || b);
+    case 'XNOR':
+      return a === b;
     default:
       return false;
   }
+}
+
+// The target constant packed into a single integer: bit i is target[i], the
+// 2**i place, so index 0 is the least significant bit. A missing or short
+// array counts the missing bits as 0.
+function targetValue(target) {
+  if (!Array.isArray(target)) return 0;
+  let value = 0;
+  for (let i = 0; i < GRID_BITS; i += 1) {
+    if (target[i]) value += 1 << i;
+  }
+  return value;
 }
 
 export function evaluate(nodes, wires, bits) {
@@ -40,13 +58,15 @@ export function evaluate(nodes, wires, bits) {
     if (node && node.id !== undefined) byId.set(node.id, node);
   }
 
-  // sources[nodeId][port] = source nodeId. Later wires to the same port win,
-  // which matches the "an input pin holds one wire, replace on reconnect" rule.
+  // sources[nodeId][port] = source nodeId. The array grows to hold as many
+  // ports as a node needs (2 for a gate, GRID_BITS for a comparator); ports
+  // never wired stay undefined and read as off. Later wires to the same port
+  // win, matching the "an input pin holds one wire, replace on reconnect" rule.
   const sources = new Map();
   for (const wire of wireList) {
     if (!wire || !byId.has(wire.to) || !byId.has(wire.from)) continue;
-    const port = wire.toPort === 1 ? 1 : 0;
-    if (!sources.has(wire.to)) sources.set(wire.to, [undefined, undefined]);
+    const port = Number.isInteger(wire.toPort) && wire.toPort >= 0 ? wire.toPort : 0;
+    if (!sources.has(wire.to)) sources.set(wire.to, []);
     sources.get(wire.to)[port] = wire.from;
   }
 
@@ -69,13 +89,24 @@ export function evaluate(nodes, wires, bits) {
 
     visiting.add(nodeId);
     const node = byId.get(nodeId);
-    const ports = sources.get(nodeId) || [undefined, undefined];
+    const ports = sources.get(nodeId) || [];
     let result = false;
 
     if (node.type === 'INPUT') {
       result = bitValues[node.label] === 1 || bitValues[node.label] === true;
     } else if (node.type === 'OUTPUT') {
       result = valueOf(ports[0]);
+    } else if (node.type === 'CMP') {
+      // Read the wired bits into a value V (port i is the 2**i place, an
+      // unwired port counting as 0), then compare it to the packed target.
+      let value = 0;
+      for (let i = 0; i < GRID_BITS; i += 1) {
+        if (valueOf(ports[i])) value += 1 << i;
+      }
+      const target = targetValue(node.target);
+      if (node.op === 'EQ') result = value === target;
+      else if (node.op === 'GT') result = value > target;
+      else result = value < target; // LT is the default
     } else if (GATE_TYPES.has(node.type)) {
       result = applyGate(node.type, valueOf(ports[0]), valueOf(ports[1]));
     }

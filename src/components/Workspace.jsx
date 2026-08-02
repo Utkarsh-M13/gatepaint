@@ -32,6 +32,9 @@ function Workspace({
   onInputPinClick,
   onPinPointerDown,
   onWireClick,
+  onToggleTargetBit,
+  onCycleOp,
+  onStepTarget,
 }) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
 
@@ -90,6 +93,9 @@ function Workspace({
           onOutputPinClick={onOutputPinClick}
           onInputPinClick={onInputPinClick}
           onPinPointerDown={onPinPointerDown}
+          onToggleTargetBit={onToggleTargetBit}
+          onCycleOp={onCycleOp}
+          onStepTarget={onStepTarget}
         />
       ))}
       {/* Rubber-band rectangle, drawn on top so it reads over the nodes. */}

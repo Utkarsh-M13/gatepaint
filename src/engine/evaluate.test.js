@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { evaluate } from './evaluate.js';
-import { bitsOf, GRID_SIZE } from './bits.js';
+import { bitsOf, GRID_SIZE, GRID_BITS } from './bits.js';
 
 // Small helpers so the circuits below read like circuits.
 const input = (id, label) => ({ id, type: 'INPUT', label, x: 0, y: 0 });
@@ -97,6 +97,106 @@ describe('evaluate: gate truth tables', () => {
 
   it('NAND', () => {
     expect(combos.map(([a, b]) => run('NAND', a, b))).toEqual([true, true, true, false]);
+  });
+
+  it('NOR', () => {
+    // NOR is on only when both inputs are off.
+    expect(combos.map(([a, b]) => run('NOR', a, b))).toEqual([true, false, false, false]);
+  });
+
+  it('XNOR', () => {
+    // XNOR is on when the two inputs match.
+    expect(combos.map(([a, b]) => run('XNOR', a, b))).toEqual([true, false, false, true]);
+  });
+});
+
+describe('evaluate: CMP comparator', () => {
+  // A binary constant array (index 0 = LSB) built from an integer.
+  const targetOf = (n) => Array.from({ length: GRID_BITS }, (_, i) => (n >> i) & 1);
+
+  const output = (id = 'out') => ({ id, type: 'OUTPUT', label: 'OUT', x: 0, y: 0 });
+  const input = (id, label) => ({ id, type: 'INPUT', label, x: 0, y: 0 });
+  const wire = (id, from, to, toPort = 0) => ({ id, from, to, toPort });
+
+  // Builds a circuit of one CMP feeding OUTPUT, with the listed ports each
+  // wired to input x{port}. Wiring port i to x{i} for every bit makes the
+  // comparator's value V exactly equal to the x coordinate.
+  function cmpCircuit(op, target, wiredPorts) {
+    const nodes = [output(), { id: 'c', type: 'CMP', op, target, x: 0, y: 0 }];
+    const wires = [wire('wo', 'c', 'out', 0)];
+    for (const p of wiredPorts) {
+      nodes.push(input(`i${p}`, `x${p}`));
+      wires.push(wire(`w${p}`, `i${p}`, 'c', p));
+    }
+    return { nodes, wires };
+  }
+
+  const allPorts = Array.from({ length: GRID_BITS }, (_, i) => i);
+  const FULL = GRID_SIZE - 1; // every target bit set, e.g. 15 at GRID_BITS = 4
+
+  it('LT is on when the wired value is below the target', () => {
+    const { nodes, wires } = cmpCircuit('LT', targetOf(5), allPorts);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      expect(evaluate(nodes, wires, bitsOf(x, 0))).toBe(x < 5);
+    }
+  });
+
+  it('EQ is on only at the target', () => {
+    const { nodes, wires } = cmpCircuit('EQ', targetOf(5), allPorts);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      expect(evaluate(nodes, wires, bitsOf(x, 0))).toBe(x === 5);
+    }
+  });
+
+  it('GT is on when the wired value is above the target', () => {
+    const { nodes, wires } = cmpCircuit('GT', targetOf(5), allPorts);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      expect(evaluate(nodes, wires, bitsOf(x, 0))).toBe(x > 5);
+    }
+  });
+
+  it('handles an all-zero target on every operator', () => {
+    const zero = targetOf(0);
+    const lt = cmpCircuit('LT', zero, allPorts);
+    const eq = cmpCircuit('EQ', zero, allPorts);
+    const gt = cmpCircuit('GT', zero, allPorts);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      expect(evaluate(lt.nodes, lt.wires, bitsOf(x, 0))).toBe(false); // nothing < 0
+      expect(evaluate(eq.nodes, eq.wires, bitsOf(x, 0))).toBe(x === 0);
+      expect(evaluate(gt.nodes, gt.wires, bitsOf(x, 0))).toBe(x > 0);
+    }
+  });
+
+  it('handles a full-scale target on every operator', () => {
+    const full = targetOf(FULL);
+    const lt = cmpCircuit('LT', full, allPorts);
+    const eq = cmpCircuit('EQ', full, allPorts);
+    const gt = cmpCircuit('GT', full, allPorts);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      expect(evaluate(lt.nodes, lt.wires, bitsOf(x, 0))).toBe(x < FULL);
+      expect(evaluate(eq.nodes, eq.wires, bitsOf(x, 0))).toBe(x === FULL);
+      expect(evaluate(gt.nodes, gt.wires, bitsOf(x, 0))).toBe(false); // nothing > full
+    }
+  });
+
+  it('treats unwired ports as 0', () => {
+    // Only the two low ports are wired, so the value is the low two bits of x.
+    const { nodes, wires } = cmpCircuit('EQ', targetOf(2), [0, 1]);
+    for (let x = 0; x < GRID_SIZE; x += 1) {
+      expect(evaluate(nodes, wires, bitsOf(x, 0))).toBe((x & 3) === 2);
+    }
+  });
+
+  it('is EQ-true when the target equals the wired value', () => {
+    const { nodes, wires } = cmpCircuit('EQ', targetOf(9), allPorts);
+    expect(evaluate(nodes, wires, bitsOf(9, 0))).toBe(true);
+    expect(evaluate(nodes, wires, bitsOf(8, 0))).toBe(false);
+  });
+
+  it('defaults a missing target to 0 without crashing', () => {
+    const { nodes, wires } = cmpCircuit('EQ', undefined, allPorts);
+    expect(evaluate(nodes, wires, bitsOf(0, 0))).toBe(true);
+    expect(evaluate(nodes, wires, bitsOf(1, 0))).toBe(false);
   });
 });
 

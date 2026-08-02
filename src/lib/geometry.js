@@ -1,6 +1,8 @@
 // Pure layout helpers for drawing nodes and wires in the SVG workspace.
 // No React here, just numbers, so Workspace/GateNode/Wire can all share it.
 
+import { GRID_BITS } from '../engine/bits.js';
+
 // Fallback workspace viewBox, used only for the first render before the SVG
 // element has been measured. At runtime the viewBox is set to the element's
 // own pixel size, so one user unit is one CSS pixel and nothing is stretched.
@@ -17,6 +19,19 @@ export const INPUT_SIZE = { width: 60, height: 32 };
 export const OUTPUT_SIZE = { width: 78, height: 42 };
 export const GATE_SIZE = { width: 84, height: 52 };
 
+// The comparator block is a plain rectangle, sized to fit GRID_BITS input
+// pins down its left edge plus the operator control and the row of constant
+// digits inside. The height is derived from GRID_BITS so a smaller grid gives
+// a shorter block with no other edits. CMP_PIN_GAP is the vertical spacing the
+// pins want; CMP_PAD is the extra room above and below them.
+export const CMP_WIDTH = 128;
+export const CMP_PIN_GAP = 24;
+export const CMP_PAD = 30;
+export const CMP_SIZE = {
+  width: CMP_WIDTH,
+  height: GRID_BITS * CMP_PIN_GAP + CMP_PAD,
+};
+
 // Schematic shape constants, shared by the drawing in GateNode and the pin
 // math below so a pin can never drift off the symbol it belongs to.
 //
@@ -32,30 +47,41 @@ export const XOR_TAIL_GAP = 7;
 // Where the two input pins sit down the height of a node, as fractions.
 export const PORT_FRACTIONS = [0.28, 0.72];
 
-// The five combinational gate types. INPUT and OUTPUT are fixtures, not gates,
-// so they are excluded: a palette drop only swaps one gate for another.
-export const GATE_TYPES = new Set(['AND', 'OR', 'NOT', 'XOR', 'NAND']);
+// The block types a palette drop can swap in place. The combinational gates
+// plus the comparator; INPUT and OUTPUT are fixtures, not swappable.
+export const GATE_TYPES = new Set([
+  'AND',
+  'OR',
+  'NOT',
+  'XOR',
+  'NAND',
+  'NOR',
+  'XNOR',
+  'CMP',
+]);
 
 // True when a node type is one of the swappable gates.
 export function isGateType(type) {
   return GATE_TYPES.has(type);
 }
 
-// True for the two shapes with the curved concave left edge.
+// True for the shield shapes with the curved concave left edge: OR and XOR
+// plus their inverted twins NOR and XNOR.
 function hasCurvedLeftEdge(type) {
-  return type === 'OR' || type === 'XOR';
+  return type === 'OR' || type === 'XOR' || type === 'NOR' || type === 'XNOR';
 }
 
-// How far the body's left edge is inset from the box. Only XOR is inset, to
-// leave room for its detached curve.
+// How far the body's left edge is inset from the box. XOR and XNOR are inset,
+// to leave room for the detached curve they both draw.
 export function getBodyInset(type) {
-  return type === 'XOR' ? XOR_TAIL_GAP : 0;
+  return type === 'XOR' || type === 'XNOR' ? XOR_TAIL_GAP : 0;
 }
 
 // Size of a node's box, keyed by its type.
 export function getNodeSize(node) {
   if (node.type === 'INPUT') return INPUT_SIZE;
   if (node.type === 'OUTPUT') return OUTPUT_SIZE;
+  if (node.type === 'CMP') return CMP_SIZE;
   return GATE_SIZE;
 }
 
@@ -97,10 +123,12 @@ export function getNodesBounds(nodes) {
 }
 
 // How many input ports a node has. INPUT nodes have none (they are sources).
-// NOT and OUTPUT read a single port. AND/OR/XOR/NAND read two.
+// NOT and OUTPUT read a single port. A comparator reads one port per grid bit.
+// AND/OR/XOR/NAND/NOR/XNOR read two.
 export function getPortCount(node) {
   if (node.type === 'INPUT') return 0;
   if (node.type === 'NOT' || node.type === 'OUTPUT') return 1;
+  if (node.type === 'CMP') return GRID_BITS;
   return 2;
 }
 
@@ -189,7 +217,14 @@ export function getOffscreenIndicator(node, pan, zoom, view, margin = 18) {
 export function getInputPinPos(node, port) {
   const { height } = getNodeSize(node);
   const count = getPortCount(node);
-  const fraction = count <= 1 ? 0.5 : PORT_FRACTIONS[port === 1 ? 1 : 0];
+  let fraction;
+  if (node.type === 'CMP') {
+    // One pin per grid bit, spread evenly down the straight left edge. Port 0
+    // (the least significant bit) sits at the top.
+    fraction = (port + 1) / (count + 1);
+  } else {
+    fraction = count <= 1 ? 0.5 : PORT_FRACTIONS[port === 1 ? 1 : 0];
+  }
   const y = node.y + height * fraction;
   const inset = getBodyInset(node.type);
   const bow = hasCurvedLeftEdge(node.type)

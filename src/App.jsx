@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_CIRCUIT, EMPTY_CIRCUIT } from './circuits.js'
+import { GRID_BITS, stepTarget } from './engine/bits.js'
 import {
   getNodeSize,
   getNodeBox,
@@ -34,6 +35,18 @@ function nextId(prefix) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
+}
+
+// The allowed comparator operators, in the order the operator control cycles.
+const CMP_OP_CYCLE = { LT: 'EQ', EQ: 'GT', GT: 'LT' }
+
+// The extra data a freshly created CMP node carries: an operator and a binary
+// constant of GRID_BITS zeros. Other node types add nothing.
+function newNodeData(type) {
+  if (type === 'CMP') {
+    return { op: 'LT', target: Array.from({ length: GRID_BITS }, () => 0) }
+  }
+  return {}
 }
 
 // A pointer moved less than this many screen pixels counts as a click, not a
@@ -438,6 +451,13 @@ function App() {
             label: drag.item.label,
             x: target.x,
             y: target.y,
+            ...newNodeData(drag.item.type),
+          }
+          // Carry the operator and constant across only when a CMP is dropped
+          // onto a CMP; otherwise the fresh defaults above stand.
+          if (drag.item.type === 'CMP' && target.type === 'CMP') {
+            if (CMP_OP_CYCLE[target.op]) swapped.op = target.op
+            if (Array.isArray(target.target)) swapped.target = [...target.target]
           }
           const newPortCount = getPortCount({ type: drag.item.type })
           setNodes((current) =>
@@ -456,6 +476,7 @@ function App() {
             label: drag.item.label,
             x: point.x - size.width / 2,
             y: point.y - size.height / 2,
+            ...newNodeData(drag.item.type),
           }
           setNodes((current) => [...current, { ...dropped, ...clampNode(dropped, view) }])
         }
@@ -848,13 +869,18 @@ function App() {
     const freshNodes = circuit.nodes.map((node) => {
       const id = nextId('n')
       idMap.set(node.id, id)
-      return { ...node, id }
+      const fresh = { ...node, id }
+      // Deep copy a comparator's constant so the loaded copy never shares the
+      // array with the source circuit.
+      if (Array.isArray(node.target)) fresh.target = [...node.target]
+      return fresh
     })
     const freshWires = circuit.wires.map((wire) => ({
       id: nextId('w'),
       from: idMap.get(wire.from),
       to: idMap.get(wire.to),
-      toPort: wire.toPort === 1 ? 1 : 0,
+      // Preserve the real port so a comparator's higher inputs survive the load.
+      toPort: Number.isInteger(wire.toPort) && wire.toPort >= 0 ? wire.toPort : 0,
     }))
     setNodes(fitNodesToView(freshNodes, view))
     setWires(freshWires)
@@ -991,6 +1017,46 @@ function App() {
       { id: nextId('w'), from, to: node.id, toPort: port },
     ])
     cancelConnect()
+  }
+
+  // Toggles one bit of a comparator's binary constant between 0 and 1. The
+  // array is copied (and padded to GRID_BITS if short) so the update is
+  // immutable and the canvas re-evaluates from the new node data.
+  function handleToggleTargetBit(nodeId, bitIndex) {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId || node.type !== 'CMP') return node
+        const target = Array.from({ length: GRID_BITS }, (_, i) =>
+          Array.isArray(node.target) && node.target[i] ? 1 : 0
+        )
+        target[bitIndex] = target[bitIndex] ? 0 : 1
+        return { ...node, target }
+      })
+    )
+  }
+
+  // Steps a comparator's whole binary constant up (+1) or down (-1) as one
+  // number, clamped to the valid range so it never wraps. The digit row
+  // re-derives from the new array on the next render.
+  function handleStepTarget(nodeId, delta) {
+    setNodes((current) =>
+      current.map((node) =>
+        node.id === nodeId && node.type === 'CMP'
+          ? { ...node, target: stepTarget(node.target, delta) }
+          : node
+      )
+    )
+  }
+
+  // Cycles a comparator's operator LT -> EQ -> GT -> LT.
+  function handleCycleOp(nodeId) {
+    setNodes((current) =>
+      current.map((node) =>
+        node.id === nodeId && node.type === 'CMP'
+          ? { ...node, op: CMP_OP_CYCLE[node.op] || 'LT' }
+          : node
+      )
+    )
   }
 
   // The rubber-band rectangle to draw, only once the sweep has moved past the
@@ -1149,6 +1215,9 @@ function App() {
                 onInputPinClick={handleInputPinClick}
                 onPinPointerDown={handlePinPointerDown}
                 onWireClick={handleWireClick}
+                onToggleTargetBit={handleToggleTargetBit}
+                onCycleOp={handleCycleOp}
+                onStepTarget={handleStepTarget}
               />
               {/* Floating zoom controls, top-right, over the SVG. The wrapper
                   passes pointer events through except on the buttons, so it

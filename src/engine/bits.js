@@ -22,3 +22,30 @@ export function bitsOf(x, y) {
   }
   return bits;
 }
+
+// The largest value a GRID_BITS binary constant can hold, e.g. 15 at 4 bits.
+export const MAX_TARGET = 2 ** GRID_BITS - 1;
+
+// Packs a binary constant array (index i is bit i, the 2**i place) into its
+// integer value. A missing or short array counts the missing bits as 0.
+export function targetToValue(target) {
+  if (!Array.isArray(target)) return 0;
+  let value = 0;
+  for (let i = 0; i < GRID_BITS; i += 1) {
+    if (target[i]) value += 1 << i;
+  }
+  return value;
+}
+
+// Unpacks an integer into a length-GRID_BITS binary constant array of 0/1.
+export function valueToTarget(value) {
+  return Array.from({ length: GRID_BITS }, (_, i) => (value >> i) & 1);
+}
+
+// Steps a binary constant up or down by `delta` (typically +1 or -1) and
+// returns the new array, clamped to 0..MAX_TARGET so it never wraps past
+// either end. At the top a +1 is a no-op; at the bottom a -1 is a no-op.
+export function stepTarget(target, delta) {
+  const next = Math.min(Math.max(targetToValue(target) + delta, 0), MAX_TARGET);
+  return valueToTarget(next);
+}

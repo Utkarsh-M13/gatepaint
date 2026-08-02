@@ -162,6 +162,13 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Canvas panel bounded to its content width (sidebar column fixed at 384px) so it no longer stretches; the gallery panel stretches to fill the remaining width instead. Thumbnail cell pitch reduced (92x108) so the 6 Featured circuits fit on one page (2 cols x 3 rows).
 - Verified: 77/77 tests, clean build, DOM measurements confirm canvas 838px (bounded), gallery fills remaining, Featured on page 1 of 1, no overflow at 1440x900.
 
+### 2026-07-31: Comparator blocks + NOR/XNOR gates (Opus)
+
+- Added NOR and XNOR as 2-input gates across evaluate, geometry, palette, and schematic symbols (OR/XOR shape plus an inversion bubble).
+- Added a comparator block (CMP): GRID_BITS wired bit-inputs on the left, one output, a clickable operator that cycles LT/EQ/GT, and a clickable binary constant (target). It reads the wired bits as a number (port 0 = LSB), compares to the target, outputs one bit. Also a directional up/down stepper that increments/decrements the whole target by 1, clamped to 0..2**GRID_BITS-1, dimming at the bounds. Operator, digits, and arrows all stopPropagation so they never start a node drag.
+- Engine gains N-port source gathering (was fixed 2 ports). GRID_BITS stays the single source of truth for pin count, digit count, and target range. Cross-cutting: KNOWN_NODE_TYPES, savedStore validation, clipboard, swap-on-drop, and load all round-trip CMP op/target and N-port wires. Pure helpers targetToValue/valueToTarget/stepTarget added to bits.js.
+- Verified: 98 tests (77 + 21 new: NOR/XNOR truth tables, comparator LT/EQ/GT with unwired ports, save/clipboard round-trips, step-and-clamp), clean build, palette shows the new items, a CMP block places successfully.
+
 ### 2026-07-30: Post-v1 UI rework (Opus)
 
 - Canvas and Workspace swapped: canvas now on top of the right column, a 440px square with 1px gridlines outlining every cell.

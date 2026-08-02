@@ -53,22 +53,28 @@ export function gateSymbol(node) {
     return { body, tail: null, labelX: x + bodyWidth / 2 };
   }
 
-  // OR and XOR: concave left edge, two convex curves meeting in a point on
-  // the right. XOR is the same shield with its body pushed right to leave
-  // room for the detached curve behind it.
+  // OR/NOR and XOR/XNOR: concave left edge, two convex curves meeting in a
+  // point on the right. XOR and XNOR are the same shield pushed right to leave
+  // room for the detached curve behind them. NOR and XNOR are the inverted
+  // twins: the shield is drawn shorter and an inversion bubble sits on the tip,
+  // the same bubble NAND and NOT use.
+  const inverted = type === 'NOR' || type === 'XNOR';
   const inset = getBodyInset(type);
   const leftX = x + inset;
-  const bodyWidth = width - inset;
-  const tipX = x + width;
+  const tipX = inverted ? x + width - 2 * BUBBLE_R : x + width;
+  const bodyWidth = tipX - leftX;
   const c1x = leftX + bodyWidth * 0.55;
   const c2x = tipX - bodyWidth * 0.28;
-  const body =
+  let body =
     `M ${leftX} ${y}` +
     ` Q ${leftX + OR_CONCAVE_DEPTH} ${midY} ${leftX} ${y + height}` +
     ` C ${c1x} ${y + height}, ${c2x} ${y + height * 0.82}, ${tipX} ${midY}` +
     ` C ${c2x} ${y + height * 0.18}, ${c1x} ${y}, ${leftX} ${y} Z`;
+  if (inverted) {
+    body += ' ' + bubbleSubpath(x + width - BUBBLE_R, midY, BUBBLE_R);
+  }
   const tail =
-    type === 'XOR'
+    type === 'XOR' || type === 'XNOR'
       ? `M ${x} ${y} Q ${x + OR_CONCAVE_DEPTH} ${midY} ${x} ${y + height}`
       : null;
   return { body, tail, labelX: (leftX + OR_CONCAVE_DEPTH + tipX) / 2 };

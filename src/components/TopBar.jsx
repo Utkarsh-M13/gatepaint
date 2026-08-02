@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { KNOWN_NODE_TYPES } from '../circuits.js';
-import { GRID_SIZE, bitsOf } from '../engine/bits.js';
+import { GRID_SIZE, GRID_BITS, bitsOf } from '../engine/bits.js';
 import { evaluate } from '../engine/evaluate.js';
+import { isValidCmpNode } from '../lib/savedStore.js';
 
 // Blurs the button after a click so focus never lingers on it. Buttons and
 // the hidden file input are the only focusable elements this bar adds, and
@@ -21,12 +22,15 @@ function isValidCircuit(data) {
   for (const node of data.nodes) {
     if (!node || typeof node.id !== 'string') return false;
     if (!KNOWN_NODE_TYPES.has(node.type)) return false;
+    if (node.type === 'CMP' && !isValidCmpNode(node)) return false;
     ids.add(node.id);
   }
   for (const wire of data.wires) {
     if (!wire || typeof wire.id !== 'string') return false;
     if (!ids.has(wire.from) || !ids.has(wire.to)) return false;
-    if (wire.toPort !== 0 && wire.toPort !== 1) return false;
+    if (!Number.isInteger(wire.toPort) || wire.toPort < 0 || wire.toPort >= GRID_BITS) {
+      return false;
+    }
   }
   return true;
 }

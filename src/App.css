@@ -1099,6 +1099,130 @@
   stroke-width: 1;
 }
 
+/* Comparator block. The body reuses .gate-node-box; these style the operator
+   control, the constant digits and the little per-pin bit labels. */
+.cmp-op {
+  cursor: pointer;
+}
+
+.cmp-op-box {
+  fill: var(--bg);
+  stroke: var(--line-hi);
+  stroke-width: 1;
+}
+
+.cmp-op:hover .cmp-op-box {
+  stroke: var(--accent);
+}
+
+.cmp-op-text {
+  fill: var(--text-h);
+  font-family: var(--sans);
+  font-size: 24px;
+  pointer-events: none;
+}
+
+.cmp-digit {
+  cursor: pointer;
+}
+
+.cmp-digit-box {
+  fill: var(--bg);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.cmp-digit:hover .cmp-digit-box {
+  stroke: var(--accent);
+}
+
+.cmp-digit-text {
+  fill: var(--text);
+  font-family: var(--seg);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+/* A lit digit: amber outline and amber segments, matching the LED readout. */
+.cmp-digit.on .cmp-digit-box {
+  stroke: var(--accent);
+}
+
+.cmp-digit.on .cmp-digit-text {
+  fill: var(--accent);
+}
+
+.cmp-pin-label {
+  fill: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* Up/down stepper: two small arrow buttons that step the whole constant. */
+.cmp-step {
+  cursor: pointer;
+}
+
+.cmp-step-box {
+  fill: var(--bg);
+  stroke: var(--line-hi);
+  stroke-width: 1;
+}
+
+.cmp-step-arrow {
+  fill: var(--text-h);
+  pointer-events: none;
+}
+
+.cmp-step:hover .cmp-step-box {
+  stroke: var(--accent);
+}
+
+.cmp-step:hover .cmp-step-arrow {
+  fill: var(--accent);
+}
+
+/* At a bound the arrow is inert and dimmed. */
+.cmp-step.disabled {
+  cursor: default;
+}
+
+.cmp-step.disabled .cmp-step-box {
+  stroke: var(--line);
+}
+
+.cmp-step.disabled .cmp-step-arrow {
+  fill: var(--line);
+}
+
+.cmp-step.disabled:hover .cmp-step-box {
+  stroke: var(--line);
+}
+
+.cmp-step.disabled:hover .cmp-step-arrow {
+  fill: var(--line);
+}
+
+/* The comparator's palette icon: pin ticks in the wire colour, a segment-font
+   constant under the operator glyph. */
+.palette-cmp-pin {
+  stroke: var(--wire);
+  stroke-width: 1.5;
+}
+
+.palette-cmp-digits {
+  fill: var(--text);
+  font-family: var(--seg);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.palette-icon .cmp-op-text {
+  fill: var(--text-h);
+  font-size: 15px;
+}
+
 .wire {
   fill: none;
   stroke: var(--wire);

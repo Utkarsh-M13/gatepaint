@@ -13,7 +13,10 @@ function Wire({ wire, nodesById, isSelected, onSelect }) {
   if (!fromNode || !toNode) return null;
 
   const start = getOutputPinPos(fromNode);
-  const end = getInputPinPos(toNode, wire.toPort === 1 ? 1 : 0);
+  // Use the wire's actual port so a comparator's higher input pins (2, 3, ...)
+  // are drawn to, not just ports 0 and 1.
+  const toPort = Number.isInteger(wire.toPort) && wire.toPort >= 0 ? wire.toPort : 0;
+  const end = getInputPinPos(toNode, toPort);
   const dx = Math.max(Math.abs(end.x - start.x) / 2, 24);
   const c1x = start.x + dx;
   const c2x = end.x - dx;

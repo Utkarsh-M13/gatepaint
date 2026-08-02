@@ -83,5 +83,8 @@ export const KNOWN_NODE_TYPES = new Set([
   'NOT',
   'XOR',
   'NAND',
+  'NOR',
+  'XNOR',
+  'CMP',
   'OUTPUT',
 ]);

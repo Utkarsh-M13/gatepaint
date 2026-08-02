@@ -64,3 +64,38 @@ describe('remapClipboard', () => {
     expect(first.nodes[0].id).not.toBe(second.nodes[0].id);
   });
 });
+
+describe('CMP nodes through copy/paste', () => {
+  const cmp = (id, op, target) => ({ id, type: 'CMP', op, target, label: 'CMP', x: 0, y: 0 });
+
+  it('deep copies op and target when building the clipboard', () => {
+    const nodes = [cmp('c', 'GT', [1, 0, 1, 0])];
+    const clip = buildClipboard(nodes, [], new Set(['c']));
+    expect(clip.nodes[0].op).toBe('GT');
+    expect(clip.nodes[0].target).toEqual([1, 0, 1, 0]);
+    // Mutating the source constant must not leak into the clipboard copy.
+    nodes[0].target[0] = 0;
+    expect(clip.nodes[0].target).toEqual([1, 0, 1, 0]);
+  });
+
+  it('preserves op/target and remaps an N-port wire on paste', () => {
+    const clip = {
+      nodes: [node('a', 'INPUT', 0, 0), cmp('c', 'EQ', [0, 1, 1, 0])],
+      // A wire onto the comparator's port 3, beyond the old two-port range.
+      wires: [wire('w1', 'a', 'c', 3)],
+    };
+    let n = 0;
+    const nextId = (p) => `${p}-${(n += 1)}`;
+    const out = remapClipboard(clip, nextId, { dx: 10, dy: 10 });
+
+    const pastedCmp = out.nodes[1];
+    expect(pastedCmp.op).toBe('EQ');
+    expect(pastedCmp.target).toEqual([0, 1, 1, 0]);
+    // The remapped wire keeps its high port and points at the new ids.
+    expect(out.wires[0].toPort).toBe(3);
+    expect(out.wires[0].from).toBe(out.nodes[0].id);
+    expect(out.wires[0].to).toBe(pastedCmp.id);
+    // The pasted constant is its own array, not shared with the clipboard.
+    expect(pastedCmp.target).not.toBe(clip.nodes[1].target);
+  });
+});

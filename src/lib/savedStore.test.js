@@ -7,6 +7,7 @@ import {
   saveCircuit,
   deleteSaved,
 } from './savedStore.js';
+import { GRID_BITS } from '../engine/bits.js';
 
 // A tiny in-memory localStorage stand-in, so the store can be exercised in
 // the node test environment without a real DOM.
@@ -63,9 +64,61 @@ describe('isValidSavedEntry', () => {
     expect(isValidSavedEntry(danglingWire)).toBe(false);
     const badPort = {
       ...validEntry,
-      circuit: { nodes: goodCircuit.nodes, wires: [{ id: 'w', from: 'i', to: 'out', toPort: 3 }] },
+      // A port at or beyond GRID_BITS is out of range for any node.
+      circuit: {
+        nodes: goodCircuit.nodes,
+        wires: [{ id: 'w', from: 'i', to: 'out', toPort: GRID_BITS }],
+      },
     };
     expect(isValidSavedEntry(badPort)).toBe(false);
+  });
+});
+
+describe('CMP nodes in a saved circuit', () => {
+  const zeros = () => Array.from({ length: GRID_BITS }, () => 0);
+  // A circuit with a comparator wired on its highest port, so it also exercises
+  // the widened toPort range.
+  const cmpCircuit = (overrides = {}) => ({
+    nodes: [
+      { id: 'ix', type: 'INPUT', label: 'x0', x: 0, y: 0 },
+      { id: 'c', type: 'CMP', op: 'LT', target: zeros(), x: 40, y: 0, ...overrides },
+      { id: 'out', type: 'OUTPUT', label: 'out', x: 100, y: 0 },
+    ],
+    wires: [
+      { id: 'w1', from: 'ix', to: 'c', toPort: GRID_BITS - 1 },
+      { id: 'w2', from: 'c', to: 'out', toPort: 0 },
+    ],
+  });
+  const cmpEntry = (circuit) => ({ id: 'saved-c', name: 'Cmp', savedAt: 1, circuit });
+
+  it('accepts a well-formed CMP node and a high-port wire', () => {
+    expect(isValidSavedEntry(cmpEntry(cmpCircuit()))).toBe(true);
+  });
+
+  it('rejects a CMP with an unknown operator', () => {
+    expect(isValidSavedEntry(cmpEntry(cmpCircuit({ op: 'NE' })))).toBe(false);
+  });
+
+  it('rejects a CMP whose target is the wrong length or not binary', () => {
+    expect(isValidSavedEntry(cmpEntry(cmpCircuit({ target: [0, 1] })))).toBe(false);
+    const notBinary = zeros();
+    notBinary[0] = 2;
+    expect(isValidSavedEntry(cmpEntry(cmpCircuit({ target: notBinary })))).toBe(false);
+    expect(isValidSavedEntry(cmpEntry(cmpCircuit({ target: undefined })))).toBe(false);
+  });
+
+  it('round-trips a CMP circuit through save and reload', () => {
+    const storage = makeStorage();
+    const target = zeros();
+    target[0] = 1;
+    saveCircuit(cmpCircuit({ op: 'GT', target }), 'Cmp', storage);
+    const reloaded = loadSaved(storage);
+    expect(reloaded).toHaveLength(1);
+    const cmp = reloaded[0].circuit.nodes.find((n) => n.type === 'CMP');
+    expect(cmp.op).toBe('GT');
+    expect(cmp.target).toEqual(target);
+    // The stored constant is a copy, not a shared reference.
+    expect(cmp.target).not.toBe(target);
   });
 });
 

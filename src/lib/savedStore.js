@@ -7,8 +7,20 @@
 // the gallery keeps a copy in the browser only.
 
 import { KNOWN_NODE_TYPES } from '../circuits.js';
+import { GRID_BITS } from '../engine/bits.js';
 
 export const SAVED_KEY = 'gatepaint.saved.v1';
+
+// The comparator operators a stored CMP node may carry.
+const CMP_OPS = new Set(['LT', 'EQ', 'GT']);
+
+// A CMP node must carry a known operator and a binary constant of exactly
+// GRID_BITS entries, each 0 or 1. Anything else is malformed.
+export function isValidCmpNode(node) {
+  if (!CMP_OPS.has(node.op)) return false;
+  if (!Array.isArray(node.target) || node.target.length !== GRID_BITS) return false;
+  return node.target.every((bit) => bit === 0 || bit === 1);
+}
 
 // Resolves the storage to use. Callers may pass their own (the tests pass a
 // small in-memory shim); otherwise the real localStorage is used when it
@@ -27,7 +39,12 @@ function resolveStorage(storage) {
 // references with the live workspace state.
 function cloneCircuit(circuit) {
   return {
-    nodes: circuit.nodes.map((node) => ({ ...node })),
+    nodes: circuit.nodes.map((node) => {
+      const copy = { ...node };
+      // A CMP node's constant is an array, so it needs its own deep copy.
+      if (Array.isArray(node.target)) copy.target = [...node.target];
+      return copy;
+    }),
     wires: circuit.wires.map((wire) => ({ ...wire })),
   };
 }
@@ -42,12 +59,15 @@ function isValidCircuit(circuit) {
   for (const node of circuit.nodes) {
     if (!node || typeof node.id !== 'string') return false;
     if (!KNOWN_NODE_TYPES.has(node.type)) return false;
+    if (node.type === 'CMP' && !isValidCmpNode(node)) return false;
     ids.add(node.id);
   }
   for (const wire of circuit.wires) {
     if (!wire || typeof wire.id !== 'string') return false;
     if (!ids.has(wire.from) || !ids.has(wire.to)) return false;
-    if (wire.toPort !== 0 && wire.toPort !== 1) return false;
+    if (!Number.isInteger(wire.toPort) || wire.toPort < 0 || wire.toPort >= GRID_BITS) {
+      return false;
+    }
   }
   return true;
 }
