@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FEATURED_CIRCUITS } from './featured.js';
 import { renderCircuitPixels } from './lib/renderCircuit.js';
 import { GRID_SIZE } from './engine/bits.js';
+import { isValidCmpNode } from './lib/savedStore.js';
 
 // Look up a featured entry by its id so a test reads by intent.
 function circuitById(id) {
@@ -56,6 +57,55 @@ describe('featured circuits render their intended paintings', () => {
       circuitById('outer-frame'),
       (x, y) => x === 0 || x === last || y === 0 || y === last
     );
+  });
+});
+
+// Geometry predicates for the comparator-built shapes, matching the formulas
+// the circuits are supposed to draw on the default 16x16 grid.
+const CENTER = (GRID_SIZE - 1) / 2; // 7.5
+const disk = (r) => (x, y) =>
+  (x - CENTER) * (x - CENTER) + (y - CENTER) * (y - CENTER) <= r * r;
+const diamond = (r) => (x, y) => Math.abs(x - CENTER) + Math.abs(y - CENTER) <= r;
+
+describe('comparator-built featured shapes match their geometry', () => {
+  it('Circle is the filled disk of radius 6: (x-7.5)^2 + (y-7.5)^2 <= 36', () => {
+    expectMatches(circuitById('circle'), disk(6));
+  });
+
+  it('Ring is disk 6 XOR disk 4: the annulus outline', () => {
+    const d6 = disk(6);
+    const d4 = disk(4);
+    expectMatches(circuitById('ring'), (x, y) => d6(x, y) !== d4(x, y));
+  });
+
+  it('Diamond is the L1 ball: |x-7.5| + |y-7.5| <= 6', () => {
+    expectMatches(circuitById('diamond'), diamond(6));
+  });
+
+  it('Triangle is the lower-left region where x <= y', () => {
+    expectMatches(circuitById('triangle'), (x, y) => x <= y);
+  });
+
+  it('Bullseye is disk 6 XOR disk 4 XOR disk 2: two concentric bands', () => {
+    const d6 = disk(6);
+    const d4 = disk(4);
+    const d2 = disk(2);
+    expectMatches(
+      circuitById('bullseye'),
+      (x, y) => d6(x, y) !== d4(x, y) !== d2(x, y)
+    );
+  });
+
+  it('every comparator-built shape actually uses CMP blocks', () => {
+    for (const id of ['circle', 'ring', 'diamond', 'triangle', 'bullseye']) {
+      const circuit = circuitById(id);
+      const cmps = circuit.nodes.filter((n) => n.type === 'CMP');
+      expect(cmps.length, `${id} should contain CMP nodes`).toBeGreaterThan(0);
+      // Every CMP must be well-formed so the circuit round-trips through save/load.
+      for (const node of cmps) {
+        expect(isValidCmpNode(node), `${id} CMP ${node.id}`).toBe(true);
+      }
+    }
   });
 });
 
