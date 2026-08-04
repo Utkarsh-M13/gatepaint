@@ -7,6 +7,12 @@ import {
   findGateAtPoint,
   getOutputPinPos,
   getInputPinPos,
+  getHomePan,
+  OUTPUT_HOME,
+  OUTPUT_SIZE,
+  HOME_OUTPUT_VIEW_FRACTION,
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
 } from './geometry.js';
 
 describe('zoomAboutPoint', () => {
@@ -28,6 +34,39 @@ describe('zoomAboutPoint', () => {
     const res = zoomAboutPoint(2.5, pan, 2, 0, 0, 0.4, 2.5);
     expect(res.zoom).toBe(2.5);
     expect(res.pan).toBe(pan);
+  });
+});
+
+describe('getHomePan', () => {
+  it('frames OUTPUT at the home fraction, vertically centered', () => {
+    const view = { width: 1000, height: 600 };
+    const pan = getHomePan(view, 1);
+    const cx = OUTPUT_HOME.x + OUTPUT_SIZE.width / 2;
+    const cy = OUTPUT_HOME.y + OUTPUT_SIZE.height / 2;
+    // Project OUTPUT's center through the home pan into screen space; it should
+    // land at the framed fraction across the view, vertically centered.
+    const screenX = pan.x + 1 * cx;
+    const screenY = pan.y + 1 * cy;
+    expect(screenX).toBeCloseTo(view.width * HOME_OUTPUT_VIEW_FRACTION);
+    expect(screenY).toBeCloseTo(view.height / 2);
+  });
+
+  it('keeps OUTPUT inside the view at the home framing', () => {
+    const view = { width: 900, height: 520 };
+    const pan = getHomePan(view, 1);
+    const left = pan.x + OUTPUT_HOME.x;
+    const top = pan.y + OUTPUT_HOME.y;
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(left + OUTPUT_SIZE.width).toBeLessThanOrEqual(view.width);
+    expect(top).toBeGreaterThanOrEqual(0);
+    expect(top + OUTPUT_SIZE.height).toBeLessThanOrEqual(view.height);
+  });
+
+  it('places OUTPUT_HOME well inside the world, not in a corner', () => {
+    expect(OUTPUT_HOME.x).toBeGreaterThan(WORLD_WIDTH * 0.4);
+    expect(OUTPUT_HOME.x + OUTPUT_SIZE.width).toBeLessThan(WORLD_WIDTH);
+    expect(OUTPUT_HOME.y).toBeGreaterThan(0);
+    expect(OUTPUT_HOME.y + OUTPUT_SIZE.height).toBeLessThan(WORLD_HEIGHT);
   });
 });
 

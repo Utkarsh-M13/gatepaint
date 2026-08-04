@@ -15,7 +15,10 @@ import {
   rectsOverlap,
   zoomAboutPoint,
   getOffscreenIndicator,
-  OUTPUT_MARGIN,
+  getHomePan,
+  OUTPUT_HOME,
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
   VIEW_WIDTH,
   VIEW_HEIGHT,
 } from './lib/geometry.js'
@@ -61,16 +64,13 @@ const PIN_HIT_RADIUS = 14
 // Zoom limits and the per-step multiplier shared by the keys and the buttons.
 // Zoom scales the workspace group only; the SVG viewBox stays pinned to the
 // panel pixel size so getScreenCTM stays valid.
-const ZOOM_MIN = 0.4
+const ZOOM_MIN = 0.3
 const ZOOM_MAX = 2.5
 const ZOOM_STEP = 1.2
 
-// The OUTPUT node is pinned to the right edge and vertically centered, which
-// is exactly where the floating zoom controls sit. On a short workspace the
-// vertical center rises into that corner and the two collide. Keep OUTPUT's
-// top no higher than this many pixels down so it always clears the controls
-// band (roughly 100px tall) while staying centered on any normal-height panel.
-const OUTPUT_TOP_RESERVE = 116
+// The whole placeable world, as a { width, height } box. Nodes clamp to this
+// instead of the visible view, so they can be spread anywhere on the board.
+const WORLD = { width: WORLD_WIDTH, height: WORLD_HEIGHT }
 
 // Normalized { x, y, width, height } rectangle from two corner points, so a
 // marquee works when dragged in any of the four directions.
@@ -83,35 +83,27 @@ function rectFromPoints(ax, ay, bx, by) {
   }
 }
 
-// Keeps a node fully inside a view of the given size. Used both while
-// dragging and when the workspace is resized under the existing nodes.
-function clampNode(node, view) {
+// Keeps a node fully inside the given bounds (a { width, height } box). Used
+// both while dragging and when a fresh circuit is dropped in. Nodes clamp to
+// the world, not the visible view, so they can be placed anywhere on the board.
+function clampNode(node, bounds) {
   const size = getNodeSize(node)
   return {
-    x: clamp(node.x, 0, Math.max(view.width - size.width, 0)),
-    y: clamp(node.y, 0, Math.max(view.height - size.height, 0)),
+    x: clamp(node.x, 0, Math.max(bounds.width - size.width, 0)),
+    y: clamp(node.y, 0, Math.max(bounds.height - size.height, 0)),
   }
 }
 
-// Pulls every node back inside the given view and re-pins OUTPUT to the
-// right edge, vertically centered. Shared by the view-resize effect and by
-// New/Load, which both drop in a fresh set of nodes that also needs pinning.
-function fitNodesToView(nodes, view) {
+// Clamps every node into the world and re-pins OUTPUT to its fixed home
+// coordinate. Shared by the resize pass and by New/Load, which drop in a fresh
+// set of nodes that also needs OUTPUT anchored. OUTPUT is the one fixture on
+// the board, so it always returns to the same stable world spot.
+function fitNodesToWorld(nodes) {
   return nodes.map((node) => {
     if (node.type === 'OUTPUT') {
-      const size = getNodeSize(node)
-      // Vertically centered, but never so high that it slides under the
-      // top-right zoom controls: hold its top at least OUTPUT_TOP_RESERVE down,
-      // then cap so it still fits inside a very short panel.
-      const centered = (view.height - size.height) / 2
-      const maxTop = Math.max(view.height - size.height, 0)
-      return {
-        ...node,
-        x: Math.max(view.width - size.width - OUTPUT_MARGIN, 0),
-        y: Math.min(Math.max(centered, OUTPUT_TOP_RESERVE), maxTop),
-      }
+      return { ...node, x: OUTPUT_HOME.x, y: OUTPUT_HOME.y }
     }
-    return { ...node, ...clampNode(node, view) }
+    return { ...node, ...clampNode(node, WORLD) }
   })
 }
 
@@ -219,6 +211,11 @@ function App() {
 
   const svgRef = useRef(null)
 
+  // Set once the first real panel measurement lands, so the HOME framing is
+  // applied exactly once (not on every later resize, which would fight the
+  // user's own panning).
+  const didInitialFrameRef = useRef(false)
+
   // Writes a new pan to both the ref (read synchronously by pointer/wheel
   // handlers) and the state (drives the render), keeping them in lockstep the
   // same way stepZoom does. Pan is left unbounded so the user can move freely.
@@ -249,12 +246,15 @@ function App() {
     zoomAbout(factor, v.width / 2, v.height / 2)
   }, [zoomAbout])
 
-  // The 100% control resets zoom to 1 AND pan back to the origin.
+  // The 100% control resets zoom to 1 AND pans back to the HOME framing, so
+  // OUTPUT and the working area around it are centered again, rather than the
+  // far corner of the world.
   const resetZoom = useCallback(() => {
+    const home = getHomePan(viewRef.current, 1)
     zoomRef.current = 1
-    panRef.current = { x: 0, y: 0 }
+    panRef.current = home
     setZoom(1)
-    setPan({ x: 0, y: 0 })
+    setPan(home)
   }, [])
 
   // Measure on mount and on every panel resize. setView keeps the previous
@@ -272,6 +272,14 @@ function App() {
           ? current
           : { width, height }
       )
+      // On the first real measurement, frame the HOME region so the user opens
+      // on OUTPUT with working room to its left, not the world's far corner.
+      if (!didInitialFrameRef.current) {
+        didInitialFrameRef.current = true
+        const home = getHomePan({ width, height }, 1)
+        panRef.current = home
+        setPan(home)
+      }
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -279,11 +287,11 @@ function App() {
     return () => observer.disconnect()
   }, [])
 
-  // When the view changes size, pull every node back inside it and re-pin the
-  // OUTPUT node to the right edge, vertically centered. OUTPUT is the one
-  // fixed fixture on the board, so it always sits in the same place.
+  // Keep every node inside the world and OUTPUT pinned to its fixed home. The
+  // world does not depend on the view size, so this really only matters on the
+  // first pass, but running it on resize is harmless and keeps OUTPUT anchored.
   useEffect(() => {
-    setNodes((current) => fitNodesToView(current, view))
+    setNodes((current) => fitNodesToWorld(current))
   }, [view])
 
   // Screen coordinates -> workspace coordinates. Two steps: first screen to
@@ -394,9 +402,13 @@ function App() {
       clientY >= rect.top &&
       clientY <= rect.bottom
     if (!insideElement) return false
+    // The drop lands in world coordinates, so accept anywhere inside the world
+    // (the panned/zoomed view may be showing any part of it). Points a touch
+    // outside are pulled back by clampNode, so this only rejects drops far off
+    // the board.
     const point = toWorkspace(clientX, clientY)
     return (
-      point.x >= 0 && point.x <= view.width && point.y >= 0 && point.y <= view.height
+      point.x >= 0 && point.x <= WORLD.width && point.y >= 0 && point.y <= WORLD.height
     )
   }
 
@@ -429,7 +441,7 @@ function App() {
           const start = drag.starts.get(node.id)
           if (!start) return node
           const moved = { ...node, x: start.x + dx, y: start.y + dy }
-          return { ...moved, ...clampNode(moved, view) }
+          return { ...moved, ...clampNode(moved, WORLD) }
         })
       )
     }
@@ -462,7 +474,7 @@ function App() {
           const newPortCount = getPortCount({ type: drag.item.type })
           setNodes((current) =>
             current.map((node) =>
-              node.id === target.id ? { ...swapped, ...clampNode(swapped, view) } : node
+              node.id === target.id ? { ...swapped, ...clampNode(swapped, WORLD) } : node
             )
           )
           setWires((current) => transferWiresForSwap(target.id, newId, newPortCount, current))
@@ -478,7 +490,7 @@ function App() {
             y: point.y - size.height / 2,
             ...newNodeData(drag.item.type),
           }
-          setNodes((current) => [...current, { ...dropped, ...clampNode(dropped, view) }])
+          setNodes((current) => [...current, { ...dropped, ...clampNode(dropped, WORLD) }])
         }
       }
       setDrag(null)
@@ -740,7 +752,7 @@ function App() {
       }
     }
     const remapped = remapClipboard(clipboard, nextId, offset)
-    const placed = remapped.nodes.map((node) => ({ ...node, ...clampNode(node, view) }))
+    const placed = remapped.nodes.map((node) => ({ ...node, ...clampNode(node, WORLD) }))
     setNodes((current) => [...current, ...placed])
     setWires((current) => [...current, ...remapped.wires])
     setSelectedNodeIds(new Set(remapped.newNodeIds))
@@ -845,8 +857,9 @@ function App() {
   // selection, since both would otherwise point at nodes that no longer
   // exist.
   function handleNew() {
-    setNodes(fitNodesToView(EMPTY_CIRCUIT.nodes, view))
+    setNodes(fitNodesToWorld(EMPTY_CIRCUIT.nodes))
     setWires(EMPTY_CIRCUIT.wires)
+    resetZoom()
     cancelConnect()
     clearSelection()
   }
@@ -854,15 +867,16 @@ function App() {
   // Replaces the circuit with one loaded from a file. The file has already
   // been validated by TopBar before this is called.
   function handleLoadCircuit(data) {
-    setNodes(fitNodesToView(data.nodes, view))
+    setNodes(fitNodesToWorld(data.nodes))
     setWires(data.wires)
+    resetZoom()
     cancelConnect()
     clearSelection()
   }
 
   // Loads a circuit (from the gallery) into the workspace, minting fresh node
   // and wire ids so a preset's baked-in ids can never collide with existing or
-  // future ones. OUTPUT is re-pinned by fitNodesToView; zoom and pan are reset
+  // future ones. OUTPUT is re-pinned by fitNodesToWorld; zoom and pan are reset
   // to the identity view so the loaded circuit lands where it was authored.
   function loadFreshCircuit(circuit) {
     const idMap = new Map()
@@ -882,7 +896,7 @@ function App() {
       // Preserve the real port so a comparator's higher inputs survive the load.
       toPort: Number.isInteger(wire.toPort) && wire.toPort >= 0 ? wire.toPort : 0,
     }))
-    setNodes(fitNodesToView(freshNodes, view))
+    setNodes(fitNodesToWorld(freshNodes))
     setWires(freshWires)
     resetZoom()
     cancelConnect()

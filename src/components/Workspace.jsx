@@ -1,5 +1,22 @@
 import GateNode from './GateNode.jsx';
 import Wire from './Wire.jsx';
+import {
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
+  WORLD_MARGIN,
+  GRID_CELL,
+  GRID_MAJOR,
+} from '../lib/geometry.js';
+
+// The graph-paper grid, in world coordinates, drawn behind the wires and
+// nodes inside the pan/zoom group so it scrolls and scales with them. It
+// overhangs the world by WORLD_MARGIN so a small pan past the edge still shows
+// grid. A single tiled <pattern> rect, so it costs almost nothing to draw.
+const GRID_MAJOR_STEP = GRID_CELL * GRID_MAJOR;
+const GRID_X = -WORLD_MARGIN;
+const GRID_Y = -WORLD_MARGIN;
+const GRID_W = WORLD_WIDTH + WORLD_MARGIN * 2;
+const GRID_H = WORLD_HEIGHT + WORLD_MARGIN * 2;
 
 // SVG surface that draws the circuit straight from state. Interaction is
 // owned by App: this component just forwards pointer events up and draws the
@@ -64,6 +81,46 @@ function Workspace({
           inverse of the screen->workspace conversion in App. At zoom=1, pan=0
           it is the identity, so nothing moves relative to the old behavior. */}
       <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
+      {/* Blueprint grid. Two nested patterns: a fine cell, then a heavier rule
+          every GRID_MAJOR cells. It lives in world space at the very back of
+          the group, and is non-interactive so marquee sweeps and palette drops
+          fall through to the background rect behind the group. */}
+      <defs>
+        <pattern
+          id="ws-grid-fine"
+          width={GRID_CELL}
+          height={GRID_CELL}
+          patternUnits="userSpaceOnUse"
+        >
+          <path
+            d={`M ${GRID_CELL} 0 L 0 0 0 ${GRID_CELL}`}
+            className="ws-grid-line-fine"
+            fill="none"
+          />
+        </pattern>
+        <pattern
+          id="ws-grid"
+          width={GRID_MAJOR_STEP}
+          height={GRID_MAJOR_STEP}
+          patternUnits="userSpaceOnUse"
+        >
+          <rect width={GRID_MAJOR_STEP} height={GRID_MAJOR_STEP} fill="url(#ws-grid-fine)" />
+          <path
+            d={`M ${GRID_MAJOR_STEP} 0 L 0 0 0 ${GRID_MAJOR_STEP}`}
+            className="ws-grid-line-major"
+            fill="none"
+          />
+        </pattern>
+      </defs>
+      <rect
+        className="ws-grid-rect"
+        x={GRID_X}
+        y={GRID_Y}
+        width={GRID_W}
+        height={GRID_H}
+        fill="url(#ws-grid)"
+        pointerEvents="none"
+      />
       {wires.map((wire) => (
         <Wire
           key={wire.id}

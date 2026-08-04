@@ -962,6 +962,26 @@
   fill: var(--bg);
 }
 
+/* Blueprint grid behind the circuit. Faint warm hairlines on the dark surface:
+   a fine cell grid with a slightly stronger rule every few cells, so it reads
+   as drafting paper without competing with the amber gates and wires. It lives
+   inside the pan/zoom group, so it scrolls and scales with the board. */
+.ws-grid-rect {
+  fill: url(#ws-grid);
+}
+
+.ws-grid-line-fine {
+  stroke: var(--line);
+  stroke-width: 1;
+  opacity: 0.16;
+}
+
+.ws-grid-line-major {
+  stroke: var(--line-hi);
+  stroke-width: 1;
+  opacity: 0.24;
+}
+
 /* Off-screen OUTPUT marker. An amber, semi-translucent chip pinned to the
    panel edge (positioned by inline left/top, centered on that point) pointing
    toward the OUTPUT node. Sits in the same top-right band as the zoom

@@ -145,6 +145,15 @@ Running log of all work done on GatePaint. Newest entries at the bottom. Each en
 - Pure helpers findPinAtPoint/findGateAtPoint/isGateType in geometry.js and transferWiresForSwap in lib/swap.js, with 13 new unit tests.
 - Verified: 54/54 tests (41 + 13), clean build, screenshot confirms render with no overflow. Interaction coexistence verified by code review and helper tests per the no-click-spam constraint.
 
+### 2026-07-31: Comparator blocks + NOR/XNOR (Opus)
+
+- New CMP block: GRID_BITS wired bit-inputs, a clickable binary target constant, an operator control cycling LT/EQ/GT, and an up/down stepper that steps the whole number (clamped). Evaluates by reconstructing the wired value and comparing. NOR and XNOR added to the gate palette with schematic icons. Engine gained N-port source gathering; serialization, clipboard, and swap carry op/target. 98 tests.
+
+### 2026-07-31: Big placeable world + background grid (Opus)
+
+- Placeable world enlarged to a fixed 2400x1600 (WORLD in geometry.js); nodes now clamp to the world, not the visible panel, so circuits can spread out. OUTPUT pinned to a stable home coordinate; getHomePan frames the view on OUTPUT at load, New/Load, and the 100% reset. ZOOM_MIN lowered to 0.3 to survey the whole board.
+- Faint graph-paper background grid (SVG pattern, fine cells with a heavier rule every 5) rendered inside the pan/zoom group behind wires and nodes, pointer-events none so marquee and drops fall through. 101 tests.
+
 ### 2026-07-31: Circuit gallery in the canvas sidebar (Opus)
 
 - Gallery panel added beside Instructions in a widened canvas sidebar. Three tabs: New (coming-soon placeholder, no backend), Saved (localStorage), Featured (bundled presets), defaulting to Featured. 2x2 thumbnail grid with prev/next pagination; each thumbnail renders the circuit's painting via the engine.

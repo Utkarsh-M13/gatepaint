@@ -9,8 +9,26 @@ import { GRID_BITS } from '../engine/bits.js';
 export const VIEW_WIDTH = 640;
 export const VIEW_HEIGHT = 420;
 
-// Gap between the right edge of the view and the OUTPUT node, which is
-// re-pinned to that edge whenever the view is resized.
+// The fixed placeable world. It is generously larger than any panel (about
+// 3-4x the fallback view each way) so gates can be spread out like a Figma
+// board. Nodes clamp to these bounds, not to the moving visible view, and the
+// background grid covers this whole area. One source of truth: changing these
+// resizes the world everywhere (clamp, grid, home framing) with no other edit.
+export const WORLD_WIDTH = 2400;
+export const WORLD_HEIGHT = 1600;
+
+// How much the background grid overhangs the world on each side, so panning a
+// little past the world edge still shows grid rather than a hard cut.
+export const WORLD_MARGIN = 400;
+
+// Background grid spacing, in world units. A fine line every GRID_CELL, with a
+// heavier rule every GRID_MAJOR cells, the usual graph-paper cadence.
+export const GRID_CELL = 24;
+export const GRID_MAJOR = 5;
+
+// Gap between the right edge of the view and the OUTPUT node, kept for any
+// callers that still want an edge margin. OUTPUT itself now lives at a fixed
+// world coordinate (OUTPUT_HOME below), not the moving view edge.
 export const OUTPUT_MARGIN = 24;
 
 // Node boxes are sized about 30% larger than the original v1 dimensions so
@@ -18,6 +36,33 @@ export const OUTPUT_MARGIN = 24;
 export const INPUT_SIZE = { width: 60, height: 32 };
 export const OUTPUT_SIZE = { width: 78, height: 42 };
 export const GATE_SIZE = { width: 84, height: 52 };
+
+// The fixed home of the OUTPUT node in world coordinates. Right of world
+// center (so inputs and gates have room to its left) and vertically centered,
+// kept clear of the very corner so it reads well. This is a stable world
+// coordinate, not tied to the view, so OUTPUT never chases the panel edge.
+export const OUTPUT_HOME = {
+  x: Math.round(WORLD_WIDTH * 0.62),
+  y: Math.round((WORLD_HEIGHT - OUTPUT_SIZE.height) / 2),
+};
+
+// Fraction of the view width where OUTPUT's center sits at the home framing,
+// so OUTPUT reads on the right with empty working room to its left.
+export const HOME_OUTPUT_VIEW_FRACTION = 0.72;
+
+// The pan that frames the HOME region: it places OUTPUT's center at
+// HOME_OUTPUT_VIEW_FRACTION across the view and vertically centered. Screen s
+// maps from world w by s = pan + zoom*w, so pan = targetScreen - zoom*w. Pure,
+// so the initial framing, resetZoom and New/Load all share it and it is unit
+// tested. Zoom defaults to 1 (the home zoom).
+export function getHomePan(view, zoom = 1) {
+  const cx = OUTPUT_HOME.x + OUTPUT_SIZE.width / 2;
+  const cy = OUTPUT_HOME.y + OUTPUT_SIZE.height / 2;
+  return {
+    x: view.width * HOME_OUTPUT_VIEW_FRACTION - zoom * cx,
+    y: view.height / 2 - zoom * cy,
+  };
+}
 
 // The comparator block is a plain rectangle, sized to fit GRID_BITS input
 // pins down its left edge plus the operator control and the row of constant
