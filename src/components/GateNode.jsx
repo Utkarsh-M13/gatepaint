@@ -4,7 +4,7 @@ import {
   getInputPinPos,
   getOutputPinPos,
 } from '../lib/geometry.js';
-import { GRID_BITS, MAX_TARGET, targetToValue } from '../engine/bits.js';
+import { GRID_BITS } from '../engine/bits.js';
 import { gateSymbol } from '../lib/symbols.js';
 
 // The glyph shown for each comparator operator.
@@ -52,44 +52,37 @@ function GateNode({
   const boxClass = isSelected ? 'gate-node-box selected' : 'gate-node-box';
 
   // Comparator interior geometry, all derived from the box so it stays put at
-  // any GRID_BITS. The operator control sits high, the digit row sits low.
+  // any GRID_BITS. Each constant digit sits on the same row as the input pin
+  // for its bit (digit i aligns with pin i, which reuses inputPins[i].y). The
+  // operator control and the up/down stepper stack together on the right,
+  // vertically centered, clear of the digit column on the left.
   let cmpUi = null;
   if (isCmp) {
-    const centerX = node.x + width / 2;
-    const opW = 34;
-    const opH = 28;
-    const opY = node.y + 12;
-
-    // The operator control and the up/down stepper sit side by side, centered
-    // as one group so the header stays balanced in the block.
-    const stepW = 18;
-    const stepGap = 6;
-    const groupW = opW + stepGap + stepW;
-    const opX = centerX - groupW / 2;
-
+    // Digit cells: one per bit, in a vertical column just right of the pins and
+    // their bit labels. cellY is filled in per digit from the matching pin's y.
     const cellW = 18;
-    const cellH = 24;
-    const gap = 4;
-    const rowW = GRID_BITS * cellW + (GRID_BITS - 1) * gap;
-    const rowX = centerX - rowW / 2;
-    const rowY = node.y + height - 12 - cellH;
+    const cellH = 18;
+    const digitX = node.x + 24;
 
-    const target = Array.isArray(node.target) ? node.target : [];
-    const op = node.op || 'LT';
-
-    // Up/down stepper: a small arrow pair stacked to the right of the operator
-    // control. It steps the whole constant by one, so it dims at each bound.
-    const value = targetToValue(target);
-    const atMax = value >= MAX_TARGET;
-    const atMin = value <= 0;
+    // Operator + stepper group, pinned to the right edge and centered in height.
+    const opW = 30;
+    const opH = 26;
+    const stepW = 16;
+    const stepGap = 4;
+    const groupW = opW + stepGap + stepW;
+    const opX = node.x + width - groupW - 16;
+    const opY = node.y + height / 2 - opH / 2;
     const stepH = opH / 2;
     const stepX = opX + opW + stepGap;
     const upY = opY;
     const downY = opY + stepH;
 
+    const target = Array.isArray(node.target) ? node.target : [];
+    const op = node.op || 'LT';
+
     cmpUi = {
-      centerX, opW, opH, opX, opY, cellW, cellH, gap, rowW, rowX, rowY, target, op,
-      atMax, atMin, stepW, stepH, stepX, upY, downY,
+      cellW, cellH, digitX, opW, opH, opX, opY,
+      stepW, stepH, stepX, upY, downY, target, op,
     };
   }
 
@@ -178,14 +171,15 @@ function GateNode({
             </text>
           </g>
           {/* Up/down stepper: increments or decrements the whole target by 1,
-              clamped at the ends. Each arrow stops the pointerdown so a click
-              never starts a node drag, and dims once its bound is reached. */}
+              wrapping at the ends (up from the max rolls to 0, down from 0 rolls
+              to the max), so both arrows stay active. Each arrow stops the
+              pointerdown so a click never starts a node drag. */}
           <g
-            className={cmpUi.atMax ? 'cmp-step disabled' : 'cmp-step'}
+            className="cmp-step"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
-              if (!cmpUi.atMax) onStepTarget(node.id, 1);
+              onStepTarget(node.id, 1);
             }}
           >
             <rect
@@ -204,11 +198,11 @@ function GateNode({
             />
           </g>
           <g
-            className={cmpUi.atMin ? 'cmp-step disabled' : 'cmp-step'}
+            className="cmp-step"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();
-              if (!cmpUi.atMin) onStepTarget(node.id, -1);
+              onStepTarget(node.id, -1);
             }}
           >
             <rect
@@ -226,12 +220,13 @@ function GateNode({
               className="cmp-step-arrow"
             />
           </g>
-          {/* Binary constant: high bit on the LEFT to match the LED readout.
-              Cell j shows bit index GRID_BITS-1-j; clicking it toggles it. */}
-          {Array.from({ length: GRID_BITS }, (_, j) => {
-            const bit = GRID_BITS - 1 - j;
+          {/* Binary constant, laid out as a vertical column: digit for bit i
+              sits on the same row as input pin i (reusing that pin's y), so the
+              user reads each bit next to the wire that feeds it. Clicking a cell
+              toggles that bit. */}
+          {Array.from({ length: GRID_BITS }, (_, bit) => {
             const on = cmpUi.target[bit] ? 1 : 0;
-            const cellX = cmpUi.rowX + j * (cmpUi.cellW + cmpUi.gap);
+            const cellY = inputPins[bit].y - cmpUi.cellH / 2;
             return (
               <g
                 key={`digit-${bit}`}
@@ -243,16 +238,16 @@ function GateNode({
                 }}
               >
                 <rect
-                  x={cellX}
-                  y={cmpUi.rowY}
+                  x={cmpUi.digitX}
+                  y={cellY}
                   width={cmpUi.cellW}
                   height={cmpUi.cellH}
                   rx={2}
                   className="cmp-digit-box"
                 />
                 <text
-                  x={cellX + cmpUi.cellW / 2}
-                  y={cmpUi.rowY + cmpUi.cellH / 2}
+                  x={cmpUi.digitX + cmpUi.cellW / 2}
+                  y={cellY + cmpUi.cellH / 2}
                   className="cmp-digit-text"
                   textAnchor="middle"
                   dominantBaseline="central"

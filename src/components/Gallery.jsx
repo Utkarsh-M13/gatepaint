@@ -31,7 +31,7 @@ function ThumbGrid({ items, page, cols, rows, onOpen }) {
     <div
       className="gallery-grid"
       style={{
-        gridTemplateColumns: `repeat(${cols}, max-content)`,
+        gridTemplateColumns: `repeat(${cols}, 92px)`,
         gridTemplateRows: `repeat(${rows}, max-content)`,
       }}
     >

@@ -43,9 +43,11 @@ export function valueToTarget(value) {
 }
 
 // Steps a binary constant up or down by `delta` (typically +1 or -1) and
-// returns the new array, clamped to 0..MAX_TARGET so it never wraps past
-// either end. At the top a +1 is a no-op; at the bottom a -1 is a no-op.
+// returns the new array, wrapping modulo 2**GRID_BITS so it rolls over at
+// both ends. Stepping up from the max (15 at 4 bits) gives 0; stepping down
+// from 0 gives the max. The extra + span handles negative deltas cleanly.
 export function stepTarget(target, delta) {
-  const next = Math.min(Math.max(targetToValue(target) + delta, 0), MAX_TARGET);
+  const span = 2 ** GRID_BITS;
+  const next = ((targetToValue(target) + delta) % span + span) % span;
   return valueToTarget(next);
 }

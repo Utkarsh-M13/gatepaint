@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_CIRCUIT, EMPTY_CIRCUIT } from './circuits.js'
-import { GRID_BITS, stepTarget } from './engine/bits.js'
+import { GRID_BITS, INPUT_LABELS, stepTarget } from './engine/bits.js'
 import {
   getNodeSize,
   getNodeBox,
@@ -849,9 +849,10 @@ function App() {
     })
   }
 
-  // True when the workspace has anything beyond the bare OUTPUT node, used
-  // to decide whether New needs to confirm before clearing.
-  const hasContent = nodes.length > 1 || wires.length > 0
+  // True when the workspace has anything beyond the starting set (the input
+  // nodes plus OUTPUT), used to decide whether New needs to confirm before
+  // clearing.
+  const hasContent = nodes.length > INPUT_LABELS.length + 1 || wires.length > 0
 
   // Resets to the blank sandbox. Also drops any in-progress wiring and
   // selection, since both would otherwise point at nodes that no longer
@@ -1050,8 +1051,8 @@ function App() {
   }
 
   // Steps a comparator's whole binary constant up (+1) or down (-1) as one
-  // number, clamped to the valid range so it never wraps. The digit row
-  // re-derives from the new array on the next render.
+  // number, wrapping around at both ends. The digit column re-derives from the
+  // new array on the next render.
   function handleStepTarget(nodeId, delta) {
     setNodes((current) =>
       current.map((node) =>

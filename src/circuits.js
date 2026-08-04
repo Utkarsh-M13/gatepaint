@@ -4,6 +4,13 @@
 // The presets below place the input nodes they actually use on the left, the
 // gate in the middle, and the output on the right.
 
+import { INPUT_LABELS } from './engine/bits.js';
+import {
+  OUTPUT_HOME,
+  WORLD_HEIGHT,
+  INPUT_SIZE,
+} from './lib/geometry.js';
+
 const INPUT_X = 60;
 const GATE_X = 300;
 const GATE_Y = 180;
@@ -63,10 +70,33 @@ export const XOR_CHECKERBOARD_CIRCUIT = {
   ],
 };
 
-// A blank sandbox: just the output node. The player drags inputs and gates in
-// from the palette and wires them up from here.
+// The starting sandbox lays all INPUT_LABELS input nodes (x0..x3, y0..y3) in a
+// tidy column to the left of OUTPUT_HOME, evenly spaced and vertically centered
+// on the world, so both the initial load and File > New open framed on the full
+// input set next to OUTPUT. Derived from INPUT_LABELS so it generalizes with
+// GRID_BITS. fitNodesToWorld clamps these into bounds and re-pins OUTPUT.
+const START_INPUT_X = OUTPUT_HOME.x - 380;
+const START_INPUT_GAP = 56;
+
+function startInputNodes() {
+  const count = INPUT_LABELS.length;
+  const top = Math.round(
+    WORLD_HEIGHT / 2 - ((count - 1) * START_INPUT_GAP) / 2 - INPUT_SIZE.height / 2
+  );
+  return INPUT_LABELS.map((label, i) => ({
+    id: `in-${label}`,
+    type: 'INPUT',
+    label,
+    x: START_INPUT_X,
+    y: top + i * START_INPUT_GAP,
+  }));
+}
+
+// The starting sandbox: every input node already placed, plus OUTPUT. The
+// player wires them up and drags in gates; the palette can still add more
+// inputs, so duplicates are harmless.
 export const EMPTY_CIRCUIT = {
-  nodes: [OUTPUT_NODE],
+  nodes: [...startInputNodes(), OUTPUT_NODE],
   wires: [],
 };
 

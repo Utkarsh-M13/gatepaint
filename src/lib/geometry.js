@@ -65,12 +65,14 @@ export function getHomePan(view, zoom = 1) {
 }
 
 // The comparator block is a plain rectangle, sized to fit GRID_BITS input
-// pins down its left edge plus the operator control and the row of constant
-// digits inside. The height is derived from GRID_BITS so a smaller grid gives
-// a shorter block with no other edits. CMP_PIN_GAP is the vertical spacing the
-// pins want; CMP_PAD is the extra room above and below them.
-export const CMP_WIDTH = 128;
-export const CMP_PIN_GAP = 24;
+// pins down its left edge, one constant digit aligned with each pin, and the
+// operator control plus up/down stepper stacked on the right. The height is
+// derived from GRID_BITS so a smaller grid gives a shorter block with no other
+// edits. CMP_PIN_GAP is the vertical spacing the pins want; CMP_PAD is the
+// extra room above and below them. The width holds three columns across: the
+// pin and its bit label, the digit cell, then the operator and stepper group.
+export const CMP_WIDTH = 140;
+export const CMP_PIN_GAP = 26;
 export const CMP_PAD = 30;
 export const CMP_SIZE = {
   width: CMP_WIDTH,
@@ -265,7 +267,8 @@ export function getInputPinPos(node, port) {
   let fraction;
   if (node.type === 'CMP') {
     // One pin per grid bit, spread evenly down the straight left edge. Port 0
-    // (the least significant bit) sits at the top.
+    // (the least significant bit) sits at the top. The comparator's constant
+    // digits reuse these same y positions so digit i lines up with pin i.
     fraction = (port + 1) / (count + 1);
   } else {
     fraction = count <= 1 ? 0.5 : PORT_FRACTIONS[port === 1 ? 1 : 0];

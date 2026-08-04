@@ -85,10 +85,10 @@ describe('binary target packing and stepping', () => {
     expect(stepTarget([0, 0, 1, 0], -1)).toEqual([1, 1, 0, 0]);
   });
 
-  it('clamps at both ends without wrapping', () => {
+  it('wraps around at both ends', () => {
     const max = valueToTarget(MAX_TARGET);
-    expect(stepTarget(max, 1)).toEqual(max); // at the top, up is a no-op
     const zero = valueToTarget(0);
-    expect(stepTarget(zero, -1)).toEqual(zero); // at the bottom, down is a no-op
+    expect(stepTarget(max, 1)).toEqual(zero); // up from the max rolls to 0
+    expect(stepTarget(zero, -1)).toEqual(max); // down from 0 rolls to the max
   });
 });
