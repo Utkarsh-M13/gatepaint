@@ -69,7 +69,12 @@ Granular checklist. Work top to bottom. Check items off as you go. Phases map to
 - [ ] Grid size toggle in UI
 
 ## Requested (user wishlist, 2026-07-31)
-- [ ] Save and Export, plus a New (clear/reset) action
-- [ ] Copy and paste for gates/subcircuits
-- [ ] Multi-select and delete (box select; single select+delete already exists)
-- [ ] Recent paintings gallery showing what other people have drawn (needs a backend or shared store, currently the app has none)
+- [x] Save and Export, plus a New (clear/reset) action
+- [x] Copy and paste for gates/subcircuits
+- [x] Multi-select and delete (box select; single select+delete already exists)
+- [ ] Recent paintings gallery showing what other people have drawn (needs a backend or shared store; local Featured + Saved shipped, "New" tab is a placeholder)
+
+## Comparator and input follow-ups (requested 2026-07-31)
+- [ ] Comparator up/down stepper should roll over (15 -> 0 and 0 -> 15) instead of clamping at the bounds
+- [ ] Comparator binary digits should sit next to the input pins, each digit aligned with its matching bit input
+- [ ] Always place all 8 input nodes (x0..x3, y0..y3) in the workspace at start, instead of starting empty
