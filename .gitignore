@@ -26,3 +26,9 @@ dist-ssr
 # Local doc copies, not part of the app
 files/
 files.zip
+
+# Internal dev docs, kept local, not published
+CLAUDE.md
+DEVPLAN.md
+TODO.md
+worklog.md
