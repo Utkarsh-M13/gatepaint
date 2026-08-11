@@ -1278,3 +1278,244 @@
   stroke-dasharray: 5 5;
   pointer-events: none;
 }
+
+/* ---------- levels page: the Level panel (gallery's slot) ---------- */
+
+/* The Level panel takes the gallery's spot in the top row, so it shares the
+   same flex sizing: it fills the width the canvas does not use. */
+.level-panel {
+  flex: 1 1 auto;
+  min-width: 240px;
+}
+
+/* Title strip carries a "Level X of N" counter on the right, so it becomes a
+   flex row like the gallery title does for its Save button. */
+.level-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.level-count {
+  font-family: var(--sans);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.level-body {
+  padding: 14px;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+  overflow-y: auto;
+}
+
+/* Name with prev/next arrows, styled like the gallery pager arrows. */
+.level-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.level-arrow {
+  flex: none;
+  font-family: var(--sans);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-h);
+  background: rgba(26, 24, 22, 0.86);
+  border: 1px solid var(--line-hi);
+  border-radius: 2px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.level-arrow:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.level-arrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.level-name {
+  font-family: var(--sans);
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--text-h);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The target painting, captioned so it reads as the goal, not the current
+   canvas. */
+.level-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-target-cap {
+  font-family: var(--sans);
+  font-size: 15px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* The two win badges, side by side. Each dims to an outline until earned. */
+.win-badges {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 22px;
+}
+
+.win-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--line-hi);
+}
+
+.badge-icon {
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+
+.win-badge-label {
+  font-family: var(--sans);
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* Lit states: the star glows gold/amber, the gated badge glows blue. The
+   label brightens to match so the earned pair reads at a glance. */
+.win-badge-star.is-earned {
+  color: #e8a15c;
+}
+
+.win-badge-gated.is-earned {
+  color: #5c9be8;
+}
+
+.win-badge.is-earned .win-badge-label {
+  color: var(--text-h);
+}
+
+/* Live match indicator under the badges: a dim pixel count, replaced by a lit
+   SOLVED banner the moment the painting matches. */
+.level-status {
+  font-family: var(--sans);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.level-status.is-solved {
+  color: var(--accent);
+  letter-spacing: 0.22em;
+}
+
+.level-hint {
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--text);
+  max-width: 320px;
+}
+
+/* ---------- level selector popup ---------- */
+
+/* Reuses the gallery modal backdrop/card; only the inner layout differs: a
+   scrollable grid of level cards. */
+.level-selector {
+  max-width: min(92vw, 720px);
+  max-height: 84vh;
+  padding: 22px 24px 20px;
+}
+
+.level-selector-title {
+  font-family: var(--sans);
+  font-size: 24px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-h);
+}
+
+.level-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 118px);
+  gap: 12px;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 4px;
+  max-height: 68vh;
+}
+
+.level-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+
+.level-card:hover {
+  border-color: var(--accent);
+}
+
+.level-card-num {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--text);
+}
+
+.level-card-name {
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.1;
+  color: var(--text-h);
+  text-align: center;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Smaller badge row for the selector cards. */
+.win-badges-small {
+  gap: 12px;
+}
+
+.win-badges-small .badge-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.win-badges-small .win-badge-label {
+  display: none;
+}

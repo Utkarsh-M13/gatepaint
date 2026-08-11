@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { DEFAULT_CIRCUIT, EMPTY_CIRCUIT } from './circuits.js'
 import { GRID_BITS, INPUT_LABELS, stepTarget } from './engine/bits.js'
@@ -28,7 +28,12 @@ import Palette from './components/Palette.jsx'
 import Workspace from './components/Workspace.jsx'
 import OutputCanvas from './components/OutputCanvas.jsx'
 import Gallery from './components/Gallery.jsx'
+import LevelPanel from './components/LevelPanel.jsx'
+import LevelSelector from './components/LevelSelector.jsx'
 import TopBar from './components/TopBar.jsx'
+import { LEVELS } from './levels.js'
+import { targetOf, evaluateWin } from './lib/winCheck.js'
+import { loadProgress, recordWin } from './lib/progressStore.js'
 
 let idCounter = 0
 function nextId(prefix) {
@@ -115,6 +120,58 @@ function App() {
   // Escape can be told to close the menu first, before it touches wiring or
   // selection.
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
+
+  // Which page is showing. 'sandbox' is the default and looks exactly as it
+  // did before Levels existed; 'levels' swaps the Gallery for the Level panel
+  // and adds the win check. The nodes/wires state is shared across both pages,
+  // so switching never wipes the circuit (use File > New to clear).
+  const [page, setPage] = useState('sandbox')
+  // The active campaign level, by index, and whether the level-selector popup
+  // is open. Persisted badge progress is loaded once from localStorage.
+  const [levelIndex, setLevelIndex] = useState(0)
+  const [levelSelectorOpen, setLevelSelectorOpen] = useState(false)
+  const [progress, setProgress] = useState(() => loadProgress())
+
+  // The active level, its goal painting (derived once from the solution), and
+  // the live result of the current workspace circuit against that goal. The
+  // target only recomputes when the level changes; the live check recomputes
+  // when the circuit or the target changes.
+  const activeLevel = LEVELS[levelIndex] || LEVELS[0]
+  const target = useMemo(() => targetOf(activeLevel), [activeLevel])
+  const live = useMemo(
+    () => evaluateWin({ nodes, wires }, target),
+    [nodes, wires, target]
+  )
+
+  // Persist a win the moment it is detected on the Levels page. A badge stays
+  // earned once set, so this only writes when the live result adds a badge the
+  // store does not already hold, which also stops it from looping.
+  useEffect(() => {
+    if (page !== 'levels' || !live.solved) return
+    const prev = progress[activeLevel.id] || { star: false, gated: false }
+    const gainsStar = live.solved && !prev.star
+    const gainsGated = live.gated && !prev.gated
+    if (gainsStar || gainsGated) {
+      setProgress(recordWin(activeLevel.id, { star: live.solved, gated: live.gated }))
+    }
+  }, [page, live, activeLevel, progress])
+
+  // Picks a level from the selector: switch to the Levels page, make it active,
+  // and close the popup. The workspace circuit is left untouched.
+  function handlePickLevel(index) {
+    setLevelIndex(index)
+    setPage('levels')
+    setLevelSelectorOpen(false)
+  }
+
+  // Badge state to display: earned-ever (persisted) OR currently satisfied, so
+  // a fresh solve lights the badge on the same frame, before the store write
+  // lands on the next tick.
+  const persistedEarned = progress[activeLevel.id] || { star: false, gated: false }
+  const earnedDisplay = {
+    star: persistedEarned.star || live.solved,
+    gated: persistedEarned.gated || live.gated,
+  }
 
   // Wiring: the node id whose output pin is armed, or null.
   const [connectFrom, setConnectFrom] = useState(null)
@@ -1182,6 +1239,12 @@ function App() {
         onLoadCircuit={handleLoadCircuit}
         menuOpen={fileMenuOpen}
         onMenuOpenChange={setFileMenuOpen}
+        page={page}
+        onOpenLevelSelector={() => {
+          setFileMenuOpen(false)
+          setLevelSelectorOpen(true)
+        }}
+        onGoSandbox={() => setPage('sandbox')}
       />
       <div className="app-panels">
         <div className="left-column">
@@ -1200,10 +1263,22 @@ function App() {
                 <OutputCanvas nodes={nodes} wires={wires} />
               </div>
             </section>
-            <Gallery
-              currentCircuit={{ nodes, wires }}
-              onOpenInWorkspace={handleOpenInWorkspace}
-            />
+            {page === 'levels' ? (
+              <LevelPanel
+                level={activeLevel}
+                index={levelIndex}
+                total={LEVELS.length}
+                earned={earnedDisplay}
+                live={live}
+                onPrev={() => setLevelIndex((i) => Math.max(0, i - 1))}
+                onNext={() => setLevelIndex((i) => Math.min(LEVELS.length - 1, i + 1))}
+              />
+            ) : (
+              <Gallery
+                currentCircuit={{ nodes, wires }}
+                onOpenInWorkspace={handleOpenInWorkspace}
+              />
+            )}
           </div>
           <section className="panel workspace-panel">
             <h2 className="panel-title">Workspace</h2>
@@ -1299,6 +1374,14 @@ function App() {
           </section>
         </div>
       </div>
+      {levelSelectorOpen && (
+        <LevelSelector
+          levels={LEVELS}
+          progress={progress}
+          onPick={handlePickLevel}
+          onClose={() => setLevelSelectorOpen(false)}
+        />
+      )}
       {drag && drag.kind === 'palette' && ghost && (
         <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }}>
           {drag.item.label}

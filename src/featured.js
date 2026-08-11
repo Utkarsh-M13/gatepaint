@@ -17,7 +17,7 @@ import { GRID_SIZE, valueToTarget } from './engine/bits.js';
 // column to the right of its deepest input, so a loaded circuit reads left to
 // right instead of arriving as a pile. Positions are approximate; the app
 // re-pins OUTPUT and clamps everything into view on load.
-function makeBuilder() {
+export function makeBuilder() {
   const nodes = [];
   const wires = [];
   const inputs = new Map();
@@ -118,7 +118,7 @@ const X_BITS = ['x0', 'x1', 'x2', 'x3'];
 const Y_BITS = ['y0', 'y1', 'y2', 'y3'];
 const LAST = GRID_SIZE - 1;
 
-function makeShapeBuilder() {
+export function makeShapeBuilder() {
   const b = makeBuilder();
 
   const and = (a, c) => b.gate('AND', a, c);
@@ -216,7 +216,7 @@ function fillShape(s, rows) {
 }
 
 // A filled disk of radius r, built from comparator bands.
-function buildDisk(r) {
+export function buildDisk(r) {
   const s = makeShapeBuilder();
   return s.b.build(fillShape(s, diskRows(r)));
 }
@@ -241,7 +241,7 @@ function buildDiamond(r) {
 // row index (x <= y). Row k lights columns 0..k, so each band is
 // (y == k) AND (x <= k). The x <= k bound needs no lower comparator, and the
 // full-width top row (x <= LAST) needs no comparator at all.
-function buildTriangle() {
+export function buildTriangle() {
   const s = makeShapeBuilder();
   const rows = [];
   for (let y = 0; y < GRID_SIZE; y += 1) rows.push({ y, L: 0, R: y });
@@ -277,7 +277,7 @@ function buildPlaid() {
 //   x == 0  is NOR of x0..x3   (no x bit set)
 //   x == 15 is AND of x0..x3   (every x bit set)
 // and likewise for y. The four conditions are OR-ed together.
-function buildFrame() {
+export function buildFrame() {
   const b = makeBuilder();
 
   // AND of a list of node ids into a left-leaning tree.

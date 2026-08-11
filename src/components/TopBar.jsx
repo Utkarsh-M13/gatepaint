@@ -85,6 +85,9 @@ function TopBar({
   onLoadCircuit,
   menuOpen,
   onMenuOpenChange,
+  page,
+  onOpenLevelSelector,
+  onGoSandbox,
 }) {
   const fileInputRef = useRef(null);
   const menuWrapRef = useRef(null);
@@ -204,6 +207,32 @@ function TopBar({
             onChange={handleFileChange}
           />
         </div>
+
+        {/* The level selector opens the campaign popup from anywhere. On the
+            Levels page a Sandbox label sits beside it to return; the active
+            page is highlighted so the current mode always reads at a glance. */}
+        <button
+          type="button"
+          className={`top-bar-menu-label${page === 'levels' ? ' is-open' : ''}`}
+          onClick={(event) => {
+            blurTarget(event);
+            onOpenLevelSelector();
+          }}
+        >
+          Levels
+        </button>
+        {page === 'levels' && (
+          <button
+            type="button"
+            className="top-bar-menu-label"
+            onClick={(event) => {
+              blurTarget(event);
+              onGoSandbox();
+            }}
+          >
+            Sandbox
+          </button>
+        )}
       </nav>
     </header>
   );
