@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import CircuitThumbnail from './CircuitThumbnail.jsx';
 
 // A star glyph (the "solved" badge) and a gate glyph (the "gated" badge),
@@ -63,6 +64,13 @@ function LevelPanel({ level, index, total, earned, live, onPrev, onNext }) {
   const atFirst = index <= 0;
   const atLast = index >= total - 1;
 
+  // The hint stays hidden behind a button, and folds back up whenever the
+  // level changes so each new puzzle starts unspoiled.
+  const [showHint, setShowHint] = useState(false);
+  useEffect(() => {
+    setShowHint(false);
+  }, [level.id]);
+
   return (
     <section className="panel level-panel">
       <div className="panel-title level-title">
@@ -107,7 +115,18 @@ function LevelPanel({ level, index, total, earned, live, onPrev, onNext }) {
           {live.solved ? 'SOLVED' : `${live.matched} / ${live.total} pixels`}
         </div>
 
-        <p className="level-hint">{level.hint}</p>
+        {level.hint ? (
+          <div className="level-hint-block">
+            <button
+              type="button"
+              className="level-hint-btn"
+              onClick={() => setShowHint((v) => !v)}
+            >
+              {showHint ? 'Hide hint' : 'Hint'}
+            </button>
+            {showHint ? <p className="level-hint">{level.hint}</p> : null}
+          </div>
+        ) : null}
       </div>
     </section>
   );
