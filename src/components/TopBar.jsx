@@ -89,6 +89,7 @@ function TopBar({
   page,
   onOpenLevelSelector,
   onGoSandbox,
+  onStartTutorial,
   onOpenHelp,
 }) {
   const fileInputRef = useRef(null);
@@ -288,8 +289,23 @@ function TopBar({
           </button>
         )}
 
-        {/* Opens the "How the number works" explainer. Button-only, never
-            auto-opens, so it stays out of the way until asked for. */}
+        {/* Tutorial is its own control, not tucked inside a help menu. It
+            auto-runs once on the first visit; this is the visible way to play
+            it again. */}
+        <button
+          type="button"
+          className="top-bar-menu-label"
+          title="Play the tutorial"
+          onClick={(event) => {
+            blurTarget(event);
+            onStartTutorial();
+          }}
+        >
+          Tutorial
+        </button>
+
+        {/* The ? opens the "how the number works" explainer directly, so it is
+            reachable any time, including during the tutorial. */}
         <button
           type="button"
           className="top-bar-menu-label top-bar-help-btn"

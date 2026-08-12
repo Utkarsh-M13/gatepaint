@@ -33,6 +33,8 @@ import LevelSelector from './components/LevelSelector.jsx'
 import TopBar from './components/TopBar.jsx'
 import Confetti from './components/Confetti.jsx'
 import NumberExplainer from './components/NumberExplainer.jsx'
+import Tutorial from './components/Tutorial.jsx'
+import { isTutorialSeen, markTutorialSeen } from './lib/tutorialStore.js'
 import { LEVELS } from './levels.js'
 import { targetOf, evaluateWin } from './lib/winCheck.js'
 import { loadProgress, recordWin } from './lib/progressStore.js'
@@ -160,6 +162,27 @@ function App() {
   // own Escape (see NumberExplainer), so it closes first without this needing
   // to be threaded into the app-wide Escape effect below.
   const [helpOpen, setHelpOpen] = useState(false)
+
+  // Whether the interactive first-run tutorial is showing. It auto-starts on
+  // the very first visit only, and never when a circuit was loaded from a
+  // share link (so a shared link is not hijacked). Once seen, it only opens
+  // again from the Help dropdown's "Play tutorial". Computed lazily so the
+  // localStorage read and the shared-link check happen exactly once, on mount.
+  const [tutorialOpen, setTutorialOpen] = useState(() => !SHARED_CIRCUIT && !isTutorialSeen())
+
+  // Finishing or skipping the tutorial marks it seen so it never auto-runs
+  // again, and closes the overlay. Replay from the Help menu reopens it.
+  function handleCloseTutorial() {
+    markTutorialSeen()
+    setTutorialOpen(false)
+  }
+
+  // Replay entry point (the top bar Tutorial button). Starts over at step 1
+  // without touching the circuit; if a step's predicate is already satisfied
+  // it just advances past it.
+  function handleStartTutorial() {
+    setTutorialOpen(true)
+  }
 
   // Which page is showing. 'sandbox' is the default and looks exactly as it
   // did before Levels existed; 'levels' swaps the Gallery for the Level panel
@@ -1306,6 +1329,7 @@ function App() {
           setLevelSelectorOpen(true)
         }}
         onGoSandbox={() => setPage('sandbox')}
+        onStartTutorial={handleStartTutorial}
         onOpenHelp={() => {
           setFileMenuOpen(false)
           setHelpOpen(true)
@@ -1322,7 +1346,7 @@ function App() {
         </div>
         <div className="right-column">
           <div className="right-top-row">
-            <section className="panel canvas-panel">
+            <section className="panel canvas-panel" data-tutorial="canvas">
               <h2 className="panel-title">Canvas</h2>
               <div className="panel-body">
                 <OutputCanvas nodes={nodes} wires={wires} />
@@ -1345,7 +1369,7 @@ function App() {
               />
             )}
           </div>
-          <section className="panel workspace-panel">
+          <section className="panel workspace-panel" data-tutorial="workspace">
             <h2 className="panel-title">Workspace</h2>
             <div className="panel-body">
               <Workspace
@@ -1447,6 +1471,14 @@ function App() {
         />
       )}
       {helpOpen && <NumberExplainer onClose={() => setHelpOpen(false)} />}
+      {tutorialOpen && (
+        <Tutorial
+          nodes={nodes}
+          wires={wires}
+          onClose={handleCloseTutorial}
+          onOpenNumber={() => setHelpOpen(true)}
+        />
+      )}
       {levelSelectorOpen && (
         <LevelSelector
           levels={LEVELS}

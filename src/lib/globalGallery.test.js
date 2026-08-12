@@ -179,6 +179,25 @@ describe('publishCircuit', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('rejects a circuit whose gate is not wired into OUTPUT (paints blank)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    // A NOT gate is present and even fed by x0, but nothing reaches OUTPUT, so
+    // the canvas stays blank. This must be rejected, not just "has a gate".
+    const danglingGate = {
+      nodes: [
+        { id: 'i', type: 'INPUT', label: 'x0', x: 0, y: 0 },
+        { id: 'g', type: 'NOT', x: 50, y: 0 },
+        { id: 'out', type: 'OUTPUT', label: 'out', x: 100, y: 0 },
+      ],
+      wires: [{ id: 'w1', from: 'i', to: 'g', toPort: 0 }],
+    };
+    await expect(publishCircuit({ title: 'Dangling', circuit: danglingGate })).rejects.toThrow(
+      /before publishing/i
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid circuit', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

@@ -1672,10 +1672,20 @@
 /* The "?" control: same label chrome as File/Levels/Sandbox, just narrower
    and pushed to the far right of the bar so it reads as a separate, always
    reachable help affordance. */
-.top-bar-help-btn {
+.top-bar-help-wrap {
   margin-left: auto;
+}
+
+.top-bar-help-btn {
   font-weight: 700;
   text-align: center;
+}
+
+/* The Help dropdown sits at the right edge of the bar, so open it aligned to
+   its right so a wide item never spills off the page. */
+.top-bar-menu-right {
+  left: auto;
+  right: 0;
 }
 
 /* ---------- number explainer overlay ---------- */
@@ -1803,5 +1813,127 @@
 
 .number-explainer-reading p:last-child {
   margin-bottom: 0;
+  color: var(--text-h);
+}
+
+/* ---------- interactive tutorial (non-modal guided overlay) ---------- */
+
+/* The whole tutorial sits above the app but never blocks it: this layer and
+   its dim/ring children pass every pointer event through, so the user drags
+   and clicks in the real workspace underneath. Only the bubble opts back in. */
+.tutorial-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.tutorial-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 10, 9, 0.42);
+  pointer-events: none;
+}
+
+/* The amber ring around the current step's target. Drawn as a border plus a
+   soft glow; the big spread shadow also darkens nothing itself, it just makes
+   the ring read against the dim. Non-interactive. */
+.tutorial-ring {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--accent-dim), 0 0 16px 2px var(--accent-dim);
+  pointer-events: none;
+  transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
+}
+
+/* The instruction bubble is the one part that takes clicks. */
+.tutorial-bubble {
+  position: absolute;
+  pointer-events: auto;
+  width: 264px;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-hi);
+  border-radius: 3px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+  font-family: var(--sans);
+  color: var(--text-h);
+}
+
+.tutorial-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tutorial-close:hover {
+  color: var(--text-h);
+}
+
+.tutorial-step-count {
+  font-family: var(--sans);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.tutorial-body {
+  margin: 6px 0 12px;
+  font-size: 19px;
+  line-height: 1.2;
+  color: var(--text-h);
+}
+
+.tutorial-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tutorial-btn {
+  font-family: var(--sans);
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 14px;
+  border-radius: 2px;
+  border: 1px solid var(--line-hi);
+  background: var(--surface-2);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.tutorial-btn-primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tutorial-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tutorial-link {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-family: var(--sans);
+  font-size: 16px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tutorial-link:hover {
   color: var(--text-h);
 }

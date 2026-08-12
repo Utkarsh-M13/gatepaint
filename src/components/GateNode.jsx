@@ -87,7 +87,10 @@ function GateNode({
   }
 
   return (
-    <g className={`gate-node gate-node-${node.type.toLowerCase()}`}>
+    <g
+      className={`gate-node gate-node-${node.type.toLowerCase()}`}
+      data-tutorial={node.type === 'OUTPUT' ? 'output' : undefined}
+    >
       {isCmp ? (
         <rect
           x={node.x}

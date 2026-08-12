@@ -10,6 +10,7 @@
 // text (React escapes it); a circuit is only ever opened after it validates.
 
 import { isValidCircuit } from './savedStore.js';
+import { renderCircuitPixels } from './renderCircuit.js';
 
 const TABLE = 'gatepaint_circuits';
 
@@ -109,15 +110,17 @@ export async function fetchRecentCircuits({ limit = 40, offset = 0 } = {}) {
   return rows.map(normalizeRow).filter(Boolean);
 }
 
-// A circuit is "empty" (nothing to publish) when it has no wires and no gates,
-// i.e. just the bare inputs and OUTPUT. Such a circuit paints nothing, so it is
-// rejected before it ever hits the network.
-function circuitHasContent(circuit) {
+// A circuit is worth publishing only when it actually paints something. We
+// render it and require at least one lit pixel, which is the real test: it
+// rejects the bare inputs+OUTPUT, gates that were dropped but never wired into
+// OUTPUT, and any wiring that leaves the canvas blank. An all-off canvas is
+// nothing to share.
+function circuitPaintsSomething(circuit) {
   if (!circuit || !Array.isArray(circuit.nodes) || !Array.isArray(circuit.wires)) {
     return false;
   }
-  if (circuit.wires.length > 0) return true;
-  return circuit.nodes.some((node) => node.type !== 'INPUT' && node.type !== 'OUTPUT');
+  const pixels = renderCircuitPixels(circuit);
+  return pixels.some(Boolean);
 }
 
 // POSTs a new circuit to the shared table. Validates and clamps client-side:
@@ -131,8 +134,8 @@ export async function publishCircuit({ title, author, circuit }) {
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, TITLE_MAX) : '';
   if (!cleanTitle) throw new Error('A title is required.');
   if (!isValidCircuit(circuit)) throw new Error('This circuit is not valid.');
-  if (!circuitHasContent(circuit)) {
-    throw new Error('Build a circuit with at least one connection before publishing.');
+  if (!circuitPaintsSomething(circuit)) {
+    throw new Error('Your circuit paints a blank canvas. Wire a gate into OUTPUT so it paints something before publishing.');
   }
   const trimmedAuthor = typeof author === 'string' ? author.trim() : '';
   const cleanAuthor = trimmedAuthor ? trimmedAuthor.slice(0, AUTHOR_MAX) : null;

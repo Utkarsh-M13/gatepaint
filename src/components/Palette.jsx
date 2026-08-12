@@ -129,6 +129,7 @@ function PaletteItem({ type, label, onDragStart }) {
       <button
         type="button"
         className={isInput ? 'palette-item palette-item-input' : 'palette-item'}
+        data-tutorial={type === 'NOT' ? 'palette-not' : undefined}
         onPointerDown={(event) => {
           event.preventDefault();
           onDragStart({ type, label }, event);
