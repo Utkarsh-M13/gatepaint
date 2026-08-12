@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import CircuitThumbnail from './CircuitThumbnail.jsx';
 import { FEATURED_CIRCUITS } from '../featured.js';
 import { loadSaved, saveCircuit, deleteSaved } from '../lib/savedStore.js';
 import { computeGridCapacity } from '../lib/galleryGrid.js';
+import {
+  isConfigured,
+  fetchRecentCircuits,
+  publishCircuit,
+} from '../lib/globalGallery.js';
 
 // Target footprint of one thumbnail cell (the rendered painting, its name
 // label, the cell's own padding/border, and its share of the grid gap), used
@@ -45,6 +50,7 @@ function ThumbGrid({ items, page, cols, rows, onOpen }) {
         >
           <CircuitThumbnail circuit={entry.circuit} size={84} />
           <span className="gallery-cell-name">{entry.name}</span>
+          {entry.author && <span className="gallery-cell-author">{entry.author}</span>}
         </button>
       ))}
     </div>
@@ -72,6 +78,7 @@ function GalleryModal({ entry, source, onClose, onOpenInWorkspace, onDelete }) {
         </button>
         <CircuitThumbnail circuit={entry.circuit} size={228} />
         <div className="gallery-modal-name">{entry.name}</div>
+        {entry.author && <div className="gallery-modal-author">by {entry.author}</div>}
         <div className="gallery-modal-actions">
           <button
             type="button"
@@ -95,9 +102,80 @@ function GalleryModal({ entry, source, onClose, onOpenInWorkspace, onDelete }) {
   );
 }
 
-// The gallery panel. Three tabs: New (a placeholder), Saved (localStorage), and
-// Featured (bundled presets). Clicking a thumbnail enlarges it; Open in
-// Workspace routes back through the parent, which handles the confirm-and-load.
+// The publish form: a small themed modal with a required Title and an optional
+// Name. Reuses the enlarge-modal shell. The parent owns the network call and
+// passes the in-flight and error state back in; this stays a controlled form.
+function PublishModal({ onClose, onSubmit, busy, error }) {
+  const [title, setTitle] = useState('');
+  const [name, setName] = useState('');
+  const canSubmit = !busy && title.trim().length > 0;
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    onSubmit({ title, author: name });
+  }
+
+  return (
+    <div className="gallery-modal-backdrop" onClick={busy ? undefined : onClose}>
+      <form
+        className="gallery-modal gallery-publish"
+        role="dialog"
+        aria-label="Publish circuit"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={handleSubmit}
+      >
+        <button
+          type="button"
+          className="gallery-modal-close"
+          onClick={onClose}
+          disabled={busy}
+          aria-label="Close"
+        >
+          &times;
+        </button>
+        <div className="gallery-modal-name">Publish circuit</div>
+        <label className="gallery-field">
+          <span className="gallery-field-label">Title</span>
+          <input
+            className="gallery-input"
+            type="text"
+            value={title}
+            maxLength={60}
+            autoFocus
+            disabled={busy}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+        </label>
+        <label className="gallery-field">
+          <span className="gallery-field-label">Name (optional)</span>
+          <input
+            className="gallery-input"
+            type="text"
+            value={name}
+            maxLength={40}
+            disabled={busy}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        {error && <p className="gallery-publish-error">{error}</p>}
+        <div className="gallery-modal-actions">
+          <button type="submit" className="gallery-action" disabled={!canSubmit}>
+            {busy ? 'Publishing...' : 'Publish'}
+          </button>
+          <button type="button" className="gallery-action" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// The gallery panel. Three tabs: New (the community feed, backed by Supabase),
+// Saved (localStorage), and Featured (bundled presets). Clicking a thumbnail
+// enlarges it; Open in Workspace routes back through the parent, which handles
+// the confirm-and-load.
 function Gallery({ currentCircuit, onOpenInWorkspace }) {
   const [tab, setTab] = useState('featured');
   const [page, setPage] = useState(0);
@@ -105,6 +183,49 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
   // The enlarged entry plus which tab it came from, or null. Source decides
   // whether the Delete action shows.
   const [selected, setSelected] = useState(null);
+
+  // The global New feed. `newStatus` is one of idle | loading | error | loaded;
+  // `newRows` holds the normalized, validated rows once loaded. The publish
+  // form has its own open/in-flight/error state.
+  const [newStatus, setNewStatus] = useState('idle');
+  const [newRows, setNewRows] = useState([]);
+  const [newError, setNewError] = useState('');
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+
+  const configured = isConfigured();
+
+  // Fetches the recent feed. Every row is already validated inside
+  // fetchRecentCircuits, so anything that lands here is safe to render and,
+  // later, to open. Errors surface as a message plus a Retry.
+  const loadNew = useCallback(async () => {
+    setNewStatus('loading');
+    setNewError('');
+    try {
+      const rows = await fetchRecentCircuits({ limit: 40 });
+      setNewRows(
+        rows.map((row) => ({
+          id: row.id,
+          name: row.title,
+          author: row.author,
+          circuit: row.circuit,
+        }))
+      );
+      setNewStatus('loaded');
+    } catch (err) {
+      setNewError(err.message || 'Something went wrong.');
+      setNewStatus('error');
+    }
+  }, []);
+
+  // Load the feed the first time the New tab is opened (and only when the
+  // backend is configured). Manual Retry and a post-publish refresh call
+  // loadNew directly.
+  useEffect(() => {
+    if (tab !== 'new' || !configured) return;
+    if (newStatus === 'idle') loadNew();
+  }, [tab, configured, newStatus, loadNew]);
 
   // The grid shell is the element that actually holds the thumbnail grid,
   // below the tabs and above the pager, so its measured size is already the
@@ -127,7 +248,14 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
     return () => observer.disconnect();
   }, []);
 
-  const items = tab === 'featured' ? FEATURED_CIRCUITS : tab === 'saved' ? saved : [];
+  const items =
+    tab === 'featured'
+      ? FEATURED_CIRCUITS
+      : tab === 'saved'
+        ? saved
+        : tab === 'new'
+          ? newRows
+          : [];
   const pageSize = Math.max(1, capacity.cols * capacity.rows);
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
 
@@ -138,19 +266,24 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
     setPage((current) => Math.min(current, pageCount - 1));
   }, [pageCount]);
 
-  // Escape closes the enlarged view. Only mounted while it is open, so it never
-  // competes with the workspace shortcuts otherwise.
+  // Escape closes whichever overlay is open: the publish form first, then the
+  // enlarged view. Only mounted while one is open (and never while a publish is
+  // in flight), so it does not compete with the workspace shortcuts otherwise.
   useEffect(() => {
-    if (!selected) return undefined;
+    if (!selected && !publishOpen) return undefined;
     function handleKey(event) {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        setSelected(null);
+        if (publishOpen) {
+          if (!publishing) setPublishOpen(false);
+        } else {
+          setSelected(null);
+        }
       }
     }
     window.addEventListener('keydown', handleKey, true);
     return () => window.removeEventListener('keydown', handleKey, true);
-  }, [selected]);
+  }, [selected, publishOpen, publishing]);
 
   function selectTab(next) {
     setTab(next);
@@ -173,6 +306,25 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
     setSelected(null);
   }
 
+  // Publishes the current workspace circuit. publishCircuit does the client-side
+  // validation (title required, circuit valid and non-empty) and throws a
+  // readable message on any problem, which we show in the form. On success the
+  // form closes and the feed reloads so the new post appears at the top.
+  async function handlePublish({ title, author }) {
+    setPublishing(true);
+    setPublishError('');
+    try {
+      await publishCircuit({ title, author, circuit: currentCircuit });
+      setPublishing(false);
+      setPublishOpen(false);
+      setPage(0);
+      loadNew();
+    } catch (err) {
+      setPublishing(false);
+      setPublishError(err.message || 'Publish failed.');
+    }
+  }
+
   function handleOpen(circuit) {
     const opened = onOpenInWorkspace(circuit);
     // The parent returns false if the user cancelled the overwrite confirm, in
@@ -192,6 +344,19 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
             title="Save the current workspace circuit"
           >
             Save current
+          </button>
+        )}
+        {tab === 'new' && configured && (
+          <button
+            type="button"
+            className="gallery-save-btn"
+            onClick={() => {
+              setPublishError('');
+              setPublishOpen(true);
+            }}
+            title="Publish the current workspace circuit to the global gallery"
+          >
+            Publish current
           </button>
         )}
       </div>
@@ -216,10 +381,31 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
               target: its measured box is the actual room left for the grid
               once the tabs above and the pager below have taken theirs. */}
           <div className="gallery-grid-shell" ref={gridShellRef}>
-            {tab === 'new' && (
-              <p className="gallery-empty">
-                Coming soon. Shared circuits need a backend that does not exist yet.
-              </p>
+            {tab === 'new' && !configured && (
+              <p className="gallery-empty">Global gallery is not set up yet.</p>
+            )}
+            {tab === 'new' && configured && newStatus === 'loading' && (
+              <p className="gallery-empty">Loading circuits...</p>
+            )}
+            {tab === 'new' && configured && newStatus === 'error' && (
+              <div className="gallery-empty gallery-error">
+                <p>{newError}</p>
+                <button type="button" className="gallery-action" onClick={loadNew}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {tab === 'new' && configured && newStatus === 'loaded' && newRows.length === 0 && (
+              <p className="gallery-empty">No circuits yet. Be the first to publish.</p>
+            )}
+            {tab === 'new' && configured && newStatus === 'loaded' && newRows.length > 0 && (
+              <ThumbGrid
+                items={newRows}
+                page={page}
+                cols={capacity.cols}
+                rows={capacity.rows}
+                onOpen={(entry) => setSelected({ entry, source: 'new' })}
+              />
             )}
             {tab === 'saved' && saved.length === 0 && (
               <p className="gallery-empty">
@@ -288,6 +474,15 @@ function Gallery({ currentCircuit, onOpenInWorkspace }) {
           onClose={() => setSelected(null)}
           onOpenInWorkspace={handleOpen}
           onDelete={handleDelete}
+        />
+      )}
+
+      {publishOpen && (
+        <PublishModal
+          onClose={() => setPublishOpen(false)}
+          onSubmit={handlePublish}
+          busy={publishing}
+          error={publishError}
         />
       )}
     </section>

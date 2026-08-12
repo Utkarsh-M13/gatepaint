@@ -51,8 +51,9 @@ function cloneCircuit(circuit) {
 
 // Same minimal shape check TopBar uses for a loaded file, applied to the
 // circuit inside a saved entry: known node types, string ids, and wires that
-// only reference existing nodes on a valid port.
-function isValidCircuit(circuit) {
+// only reference existing nodes on a valid port. Exported so the global
+// gallery can run the identical check on untrusted rows fetched from Supabase.
+export function isValidCircuit(circuit) {
   if (!circuit || typeof circuit !== 'object') return false;
   if (!Array.isArray(circuit.nodes) || !Array.isArray(circuit.wires)) return false;
   const ids = new Set();

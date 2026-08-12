@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local environment files with Supabase config. Never commit real keys; see
+# .env.example for the variables the app reads.
+.env
+.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
