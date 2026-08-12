@@ -37,3 +37,8 @@ CLAUDE.md
 DEVPLAN.md
 TODO.md
 worklog.md
+
+# Agent skills tooling (installed via `skills add`), not part of the app
+.agents/
+.claude/skills/
+skills-lock.json
