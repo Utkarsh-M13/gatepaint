@@ -57,6 +57,13 @@ function ReadoutStrip({ hovered }) {
   const active = Boolean(hovered);
   const bits = active ? bitsOf(hovered.x, hovered.y) : null;
   const hint = active ? `x = ${hovered.x}   y = ${hovered.y}` : 'hover a pixel';
+  // A newcomer-facing caption under the hint: what the digits ARE when
+  // nothing is hovered, and a plain "column X, row Y" reading once a pixel
+  // is picked. Small text only, added below the existing hint line so the
+  // LED digit sizing and the rest of the sidebar layout stay untouched.
+  const caption = active
+    ? `column ${hovered.x}, row ${hovered.y}`
+    : "the pixel's position in binary";
 
   return (
     <div className={active ? 'readout-strip readout-active' : 'readout-strip'}>
@@ -74,6 +81,7 @@ function ReadoutStrip({ hovered }) {
         </span>
       </div>
       <div className="readout-hint">{hint}</div>
+      <div className="readout-caption">{caption}</div>
     </div>
   );
 }

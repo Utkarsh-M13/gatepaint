@@ -89,6 +89,7 @@ function TopBar({
   page,
   onOpenLevelSelector,
   onGoSandbox,
+  onOpenHelp,
 }) {
   const fileInputRef = useRef(null);
   const menuWrapRef = useRef(null);
@@ -286,6 +287,21 @@ function TopBar({
             Sandbox
           </button>
         )}
+
+        {/* Opens the "How the number works" explainer. Button-only, never
+            auto-opens, so it stays out of the way until asked for. */}
+        <button
+          type="button"
+          className="top-bar-menu-label top-bar-help-btn"
+          title="How the number works"
+          aria-label="How the number works"
+          onClick={(event) => {
+            blurTarget(event);
+            onOpenHelp();
+          }}
+        >
+          ?
+        </button>
       </nav>
     </header>
   );

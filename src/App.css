@@ -628,6 +628,22 @@
   color: var(--led-on);
 }
 
+/* A small newcomer-facing caption under the hint line: what the digits are
+   when nothing is hovered, and a plain "column X, row Y" reading once a
+   pixel is picked. Kept small so it never disturbs the LED digit sizing. */
+.readout-caption {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.2;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+.readout-active .readout-caption {
+  color: var(--led-on);
+  opacity: 0.9;
+}
+
 /* How-to-play copy. Its own panel on the sidebar, same plate and ruled title
    strip as every other panel, so it reads as a separate instrument. */
 .howto-panel {
@@ -1649,4 +1665,143 @@
 
 .win-badges-small .win-badge-label {
   display: none;
+}
+
+/* ---------- top bar help button ---------- */
+
+/* The "?" control: same label chrome as File/Levels/Sandbox, just narrower
+   and pushed to the far right of the bar so it reads as a separate, always
+   reachable help affordance. */
+.top-bar-help-btn {
+  margin-left: auto;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---------- number explainer overlay ---------- */
+
+/* Reuses the gallery modal backdrop/card; only the inner layout differs: a
+   small pixel grid beside a readout that mirrors the LED strip. */
+.number-explainer {
+  max-width: min(92vw, 640px);
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.number-explainer-body {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.number-explainer-grid {
+  display: grid;
+  gap: 1px;
+  width: 224px;
+  height: 224px;
+  background: var(--line);
+  border: 1px solid var(--line-hi);
+  flex: none;
+}
+
+.number-explainer-cell {
+  background: var(--bg);
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.number-explainer-cell:hover {
+  background: var(--accent-ghost);
+}
+
+.number-explainer-cell.is-selected {
+  background: var(--accent);
+}
+
+.number-explainer-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.number-explainer-coord {
+  font-family: var(--sans);
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.number-explainer-binary {
+  font-family: var(--sans);
+  font-size: 24px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin: 0;
+}
+
+.number-explainer-chips {
+  display: flex;
+  align-items: center;
+}
+
+.number-explainer-chip-group {
+  display: flex;
+  gap: 6px;
+}
+
+.number-explainer-chip-gap {
+  width: 14px;
+}
+
+.explainer-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 30px;
+  padding: 5px 0;
+  background: var(--bg);
+  border: 1px solid var(--line-hi);
+  border-radius: 2px;
+}
+
+.explainer-chip-value {
+  font-family: var(--seg);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--accent-dim);
+}
+
+.explainer-chip.explainer-chip-on .explainer-chip-value {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(224, 101, 79, 0.7);
+}
+
+.explainer-chip-label {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.number-explainer-reading {
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--text);
+  max-width: 320px;
+}
+
+.number-explainer-reading p {
+  margin: 0 0 6px;
+}
+
+.number-explainer-reading p:last-child {
+  margin-bottom: 0;
+  color: var(--text-h);
 }

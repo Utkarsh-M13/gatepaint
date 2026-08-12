@@ -32,6 +32,7 @@ import LevelPanel from './components/LevelPanel.jsx'
 import LevelSelector from './components/LevelSelector.jsx'
 import TopBar from './components/TopBar.jsx'
 import Confetti from './components/Confetti.jsx'
+import NumberExplainer from './components/NumberExplainer.jsx'
 import { LEVELS } from './levels.js'
 import { targetOf, evaluateWin } from './lib/winCheck.js'
 import { loadProgress, recordWin } from './lib/progressStore.js'
@@ -153,6 +154,12 @@ function App() {
   // Escape can be told to close the menu first, before it touches wiring or
   // selection.
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
+
+  // Whether the "How the number works" explainer overlay is open. Button-only
+  // (the ? in the top bar): never auto-opens on first visit. It captures its
+  // own Escape (see NumberExplainer), so it closes first without this needing
+  // to be threaded into the app-wide Escape effect below.
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Which page is showing. 'sandbox' is the default and looks exactly as it
   // did before Levels existed; 'levels' swaps the Gallery for the Level panel
@@ -1299,6 +1306,10 @@ function App() {
           setLevelSelectorOpen(true)
         }}
         onGoSandbox={() => setPage('sandbox')}
+        onOpenHelp={() => {
+          setFileMenuOpen(false)
+          setHelpOpen(true)
+        }}
       />
       <div className="app-panels">
         <div className="left-column">
@@ -1435,6 +1446,7 @@ function App() {
           onDone={() => setConfettiBurst(null)}
         />
       )}
+      {helpOpen && <NumberExplainer onClose={() => setHelpOpen(false)} />}
       {levelSelectorOpen && (
         <LevelSelector
           levels={LEVELS}
