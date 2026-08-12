@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KNOWN_NODE_TYPES } from '../circuits.js';
 import { GRID_SIZE, GRID_BITS, bitsOf } from '../engine/bits.js';
 import { evaluate } from '../engine/evaluate.js';
 import { isValidCmpNode } from '../lib/savedStore.js';
+import { buildShareUrl } from '../lib/shareLink.js';
 
 // Blurs the button after a click so focus never lingers on it. Buttons and
 // the hidden file input are the only focusable elements this bar adds, and
@@ -92,6 +93,22 @@ function TopBar({
   const fileInputRef = useRef(null);
   const menuWrapRef = useRef(null);
 
+  // Brief, unobtrusive confirmation for Copy Link (or its failure). Clears
+  // itself after a short delay; the timer is cleared on unmount so it never
+  // fires a state update on a gone component.
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+  function showToast(message) {
+    setToast(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 1800);
+  }
+
   // Closes the menu on any pointerdown outside the File button/menu. Escape
   // is handled by App, not here, so the menu also closes with the app-wide
   // priority Escape gives it.
@@ -161,6 +178,32 @@ function TopBar({
     anchor.remove();
   }
 
+  // Builds a share URL for the current circuit and copies it to the OS
+  // clipboard. The circuit lives entirely in the URL hash, so nothing is
+  // sent anywhere. A clipboard failure (permissions, insecure context, an
+  // older browser) falls back to a prompt the user can copy from by hand,
+  // rather than crashing or failing silently.
+  async function handleCopyLinkClick(event) {
+    blurTarget(event);
+    onMenuOpenChange(false);
+    const url = buildShareUrl({ nodes, wires });
+    if (!url) {
+      showToast('Could not build link');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied');
+    } catch {
+      try {
+        window.prompt('Copy this link:', url);
+        showToast('Link ready');
+      } catch {
+        showToast('Could not copy link');
+      }
+    }
+  }
+
   return (
     <header className="top-bar">
       <span className="top-bar-title">GATEPAINT</span>
@@ -197,6 +240,11 @@ function TopBar({
                   Export
                 </button>
               </li>
+              <li>
+                <button type="button" className="top-bar-menu-item" onClick={handleCopyLinkClick}>
+                  Copy Link
+                </button>
+              </li>
             </ul>
           )}
           <input
@@ -206,6 +254,11 @@ function TopBar({
             className="top-bar-file-input"
             onChange={handleFileChange}
           />
+          {toast && (
+            <div className="top-bar-toast" role="status">
+              {toast}
+            </div>
+          )}
         </div>
 
         {/* The level selector opens the campaign popup from anywhere. On the

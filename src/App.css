@@ -119,6 +119,25 @@
   display: none;
 }
 
+/* Brief confirmation for Copy Link, anchored under the File menu wrapper so
+   it reads as a response to that action without depending on the menu
+   staying open. */
+.top-bar-toast {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 21;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 2px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* Disabled menu items read as greyed and inert: dimmed text, no cursor, and
    no amber hover bar. Shared by the File menu and the workspace context menu,
    though only the context menu currently disables items. */

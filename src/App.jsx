@@ -31,15 +31,48 @@ import Gallery from './components/Gallery.jsx'
 import LevelPanel from './components/LevelPanel.jsx'
 import LevelSelector from './components/LevelSelector.jsx'
 import TopBar from './components/TopBar.jsx'
+import Confetti from './components/Confetti.jsx'
 import { LEVELS } from './levels.js'
 import { targetOf, evaluateWin } from './lib/winCheck.js'
 import { loadProgress, recordWin } from './lib/progressStore.js'
+import { readCircuitFromHash } from './lib/shareLink.js'
 
 let idCounter = 0
 function nextId(prefix) {
   idCounter += 1
   return `${prefix}-${idCounter}`
 }
+
+// On app load, a circuit shared via URL (#c=...) takes the place of the
+// normal default. readCircuitFromHash already validates the decoded shape
+// (untrusted input), so this only has to re-mint ids so a shared circuit's
+// baked-in ids can never collide with anything else, and to run it through
+// fitNodesToWorld so OUTPUT lands on its fixed home spot. Computed once at
+// module load, which is exactly "on app load"; returns null when the hash
+// has no circuit or it fails validation, so the caller falls back to the
+// normal default with no crash.
+function loadSharedCircuitFromHash() {
+  if (typeof window === 'undefined') return null
+  const decoded = readCircuitFromHash(window.location.hash)
+  if (!decoded) return null
+  const idMap = new Map()
+  const freshNodes = decoded.nodes.map((node) => {
+    const id = nextId('n')
+    idMap.set(node.id, id)
+    const fresh = { ...node, id }
+    if (Array.isArray(node.target)) fresh.target = [...node.target]
+    return fresh
+  })
+  const freshWires = decoded.wires.map((wire) => ({
+    id: nextId('w'),
+    from: idMap.get(wire.from),
+    to: idMap.get(wire.to),
+    toPort: Number.isInteger(wire.toPort) && wire.toPort >= 0 ? wire.toPort : 0,
+  }))
+  return { nodes: freshNodes, wires: freshWires }
+}
+
+const SHARED_CIRCUIT = loadSharedCircuitFromHash()
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -113,8 +146,8 @@ function fitNodesToWorld(nodes) {
 }
 
 function App() {
-  const [nodes, setNodes] = useState(DEFAULT_CIRCUIT.nodes)
-  const [wires, setWires] = useState(DEFAULT_CIRCUIT.wires)
+  const [nodes, setNodes] = useState(SHARED_CIRCUIT ? SHARED_CIRCUIT.nodes : DEFAULT_CIRCUIT.nodes)
+  const [wires, setWires] = useState(SHARED_CIRCUIT ? SHARED_CIRCUIT.wires : DEFAULT_CIRCUIT.wires)
 
   // Whether the top bar's File dropdown is open. Lifted up from TopBar so
   // Escape can be told to close the menu first, before it touches wiring or
@@ -155,6 +188,27 @@ function App() {
       setProgress(recordWin(activeLevel.id, { star: live.solved, gated: live.gated }))
     }
   }, [page, live, activeLevel, progress])
+
+  // Confetti: fires exactly once per solve, on the rising edge where
+  // `live.solved` flips from false to true for the CURRENT level. Never fires
+  // merely from switching to a level that is already solved, and never fires
+  // on every render. `prevSolvedRef` tracks the last-seen solved value per
+  // level id; the first time a level id is seen it seeds from the persisted
+  // badge (so an already-earned level does not fire on arrival), not from a
+  // bare false. Breaking and re-solving a level fires it again, since the
+  // tracked value goes back to false in between.
+  const [confettiBurst, setConfettiBurst] = useState(null)
+  const prevSolvedRef = useRef(new Map())
+  useEffect(() => {
+    if (page !== 'levels') return
+    const levelId = activeLevel.id
+    const seen = prevSolvedRef.current.has(levelId)
+    const wasSolved = seen ? prevSolvedRef.current.get(levelId) : Boolean(progress[levelId]?.star)
+    if (live.solved && !wasSolved) {
+      setConfettiBurst({ gated: live.gated, key: Date.now() })
+    }
+    prevSolvedRef.current.set(levelId, live.solved)
+  }, [page, activeLevel, live.solved, live.gated, progress])
 
   // Picks a level from the selector: switch to the Levels page, make it active,
   // and close the popup. The workspace circuit is left untouched.
@@ -1374,6 +1428,13 @@ function App() {
           </section>
         </div>
       </div>
+      {confettiBurst && (
+        <Confetti
+          key={confettiBurst.key}
+          gated={confettiBurst.gated}
+          onDone={() => setConfettiBurst(null)}
+        />
+      )}
       {levelSelectorOpen && (
         <LevelSelector
           levels={LEVELS}
